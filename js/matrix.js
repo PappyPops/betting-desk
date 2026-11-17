@@ -1,5 +1,5 @@
-import { games, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache } from './core.js';
-import { nflHist, teamRows } from './hist.js';
+import { games, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache } from './core.js?v=202611162101';
+import { nflHist, teamRows } from './hist.js?v=202611162101';
 
 // Building blocks. Angles are 2–3 of these from different families.
 const ATOMS = [
