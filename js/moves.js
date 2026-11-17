@@ -2,7 +2,7 @@
 // the number to get, and the number where it's no longer worth chasing. Every flag is frozen when it first fires
 // (from the saved line history) and graded two ways: did the line keep moving past it by kickoff, and did it win.
 // Rules written Nov 17, 2026, before any of these flags had been graded.
-import { api } from './core.js?v=202611171324';
+import { api } from './core.js?v=202611171325';
 
 export const TRIG = { nfl: { tot: 1.5, sp: 1 }, cfb: { tot: 1.5, sp: 1.5 }, nba: { tot: 2, sp: 1.5 } };
 export const STEP = { nfl: { tot: 1, sp: 1 }, cfb: { tot: 1.5, sp: 1.5 }, nba: { tot: 1.5, sp: 1 } };
@@ -96,7 +96,7 @@ export async function loadFlags(games) {
 // lines since 2008, graded at the close). Only the two cases with a real lean are called out.
 export function historyNote(lg, f) {
   if (lg !== 'nfl') return null;
-  if (f.mk === 'sp' && f.move >= 3 && f.num < 0) return { tone: 'clay', text: 'Don’t chase this one. Since 2008, NFL favorites the line moved 3+ points toward covered only 63–90 (41%) at the closing number. Big moves like this are usually injury news that’s already priced in.' };
+  if (f.mk === 'sp' && f.move >= 3 && f.open < 0) return { tone: 'clay', text: 'Don’t chase this one. Since 2008, opening NFL favorites the line moved 3+ more points toward covered only 63–90 (41%) at the closing number. Big moves like this are usually injury news that’s already priced in.' };
   if (f.mk === 'tot' && f.move >= 4 && f.side === 'under') return { tone: 'mint', text: 'History backs it: since 2008, NFL totals that fell 4+ points still went under 82–57 (59%) at the closing number.' };
   return null;
 }
