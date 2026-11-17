@@ -1,4 +1,4 @@
-import { games, api, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn } from './core.js?v=202611162225';
+import { games, api, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn } from './core.js?v=202611162226';
 
 // Edges a projection needs over the DraftKings number before it counts as a lock.
 const EDGE = { pre: 5, q1: 6, half: 6, q3: 5 };
@@ -108,11 +108,12 @@ export async function render(el) {
 
     const gameCard = (g, kind) => {
       const pr = project(rt, g.home, g.away); const d = g.data;
-      const ln = g.total !== null ? Number(g.total) : null, spH = g.spread_home !== null ? Number(g.spread_home) : null;
+      const ln = g.total !== null ? Number(g.total) : g.close_total > 0 ? Number(g.close_total) : null, spH = g.spread_home !== null ? Number(g.spread_home) : null;
       let projT = pr?.total ?? null, stage = 'Pregame';
       if (kind === 'live' && pr) {
-        const per = d.period || 1; const [mm, ss] = String(d.clock || '12:00').split(':').map(Number);
-        const mins = Math.min(48, (per - 1) * 12 + (12 - (mm + (ss || 0) / 60)));
+        const per = Math.min(4, d.period || 1); const ck = String(d.clock ?? '12:00');
+        const left = ck.includes(':') ? (([mm, ss]) => mm + (ss || 0) / 60)(ck.split(':').map(Number)) : Number(ck) / 60; // under a minute ESPN sends seconds only
+        const mins = Math.min(48, (per - 1) * 12 + (12 - Math.min(12, left || 0)));
         projT = liveProj(pr.total, (d.home.score || 0) + (d.away.score || 0), mins); stage = d.detail;
       }
       const edge = kind === 'pre' && projT !== null && ln !== null ? projT - ln : null;
