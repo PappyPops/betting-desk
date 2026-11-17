@@ -1,6 +1,6 @@
-import { games as loadGames, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, logo } from './core.js?v=202611162202';
-import { nflHist } from './hist.js?v=202611162202';
-import { makeContext, parseSystem, matchSystem, gradePick, pickLabel } from './systems.js?v=202611162202';
+import { games as loadGames, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, logo } from './core.js?v=202611162208';
+import { nflHist } from './hist.js?v=202611162208';
+import { makeContext, parseSystem, matchSystem, gradePick, pickLabel } from './systems.js?v=202611162208';
 
 const NFL_IN_RECORD = (g) => g.season < 2026 || (g.season === 2026 && g.week <= 9); // Grok's NFL records run through 2026 week 9
 const CFB_FROM_WEEK = 5; // Grok's college records run through 2026 week 4
@@ -47,10 +47,11 @@ export async function render(el) {
   const st = { tab: store.get('mx2:tab', 'week'), lg: store.get('mx2:lg', 'NFL'), kind: 'all', tier: 'all', q: '', open: null };
   el.innerHTML = '<div class="loading">Loading 464 systems and rebuilding every rule…</div>';
   const now = new Date();
-  const [file, hist, nflLive, cfbRows] = await Promise.all([
+  const [file, hist, nflLive, cfbRows, nbaRows] = await Promise.all([
     systemsFile(), nflHist(),
     loadGames({ league: 'nfl', from: new Date(now.getTime() - 6 * 3600e3).toISOString(), to: new Date(now.getTime() + 12 * 86400e3).toISOString() }),
     loadGames({ league: 'cfb', from: '2026-08-01', ttl: 300_000 }),
+    loadGames({ league: 'nba', from: '2026-10-20', ttl: 300_000 }),
   ]);
   await new Promise((r) => setTimeout(r, 0));
   const liveById = new Map(nflLive.map((g) => [g.id, g]));
@@ -88,6 +89,23 @@ export async function render(el) {
   const cfbWeeks = [...new Set(after.NCAAF.map((g) => g.week))].sort((a, b) => a - b);
   const nflWeeks = [...new Set(after.NFL.map((g) => g.week))].sort((a, b) => a - b);
 
+  // ---- research systems: graded before and after they were published ----
+  const NB = nbaGames(nbaRows);
+  const pool = { NFL: NG.filter((g) => g.final), NBA: NB.filter((g) => g.final) };
+  const blank = () => ({ w: 0, l: 0, p: 0, u: 0, n: 0 });
+  for (const r of RESEARCH) {
+    r.before = blank(); r.after = blank(); r.now = blank();
+    for (const g of pool[r.league]) {
+      const m = r.pick(g); if (!m) continue;
+      const gr = gradeResearch(g, m, gradePick); if (!gr) continue;
+      const o = m.kind === 'moneyline' ? (m.side === 'home' ? g.home_ml : g.away_ml) : null;
+      const units = gr === 'win' ? (o ? (o > 0 ? o / 100 : 100 / -o) : 100 / 110) : gr === 'loss' ? -1 : 0;
+      const buckets = r.league === 'NBA' ? [r.now] : [g.season < r.year ? r.before : r.after, ...(g.season === 2026 ? [r.now] : [])];
+      for (const b of buckets) { b[gr === 'win' ? 'w' : gr === 'loss' ? 'l' : 'p']++; b.u += units; if (gr !== 'push') b.n++; }
+    }
+  }
+  const researchUpcoming = { NFL: [], NBA: NB.filter((g) => g.live.state === 'pre' && new Date(g.live.start_time).getTime() < now.getTime() + 2 * 86400e3) };
+
   // ---- this week ----
   const upcoming = {
     NFL: (() => { const u = NG.filter((g) => !g.final && g.season === 2026 && g.home_spread != null && (!g.live || g.live.state === 'pre') && g.date >= new Date(now.getTime() - 86400e3).toISOString().slice(0, 10)); const wk = Math.min(...u.map((g) => g.week)); return u.filter((g) => g.week === wk); })(),
@@ -99,7 +117,8 @@ export async function render(el) {
       const hits = [];
       for (const s of systems.filter((x) => x.league === lg)) { const m = matchSystem(ctx[lg], s, s.parsed, g, caches[lg]); if (m) hits.push({ s, m, label: pickLabel(g, m) }); }
       const byPick = new Map(); for (const h of hits) { const k = h.label; if (!byPick.has(k)) byPick.set(k, []); byPick.get(k).push(h); }
-      return { g, hits, picks: [...byPick.entries()].sort((a, b) => b[1].length - a[1].length) };
+      const rhits = lg === 'NFL' ? RESEARCH.filter((r) => r.league === 'NFL').map((r) => ({ r, m: r.pick(g) })).filter((x) => x.m).map((x) => ({ ...x, label: researchLabel(g, x.m, pickLabel) })) : [];
+      return { g, hits, rhits, picks: [...byPick.entries()].sort((a, b) => b[1].length - a[1].length) };
     }).sort((a, b) => (a.g.date + a.g.time).localeCompare(b.g.date + b.g.time));
   }
 
@@ -112,6 +131,26 @@ export async function render(el) {
         ${s.since.games.length ? `<div class="kicker" style="color:var(--muted);margin:6px 0">Since it was found</div>${s.since.games.slice(-12).reverse().map(({ g, m, gr }) => `<div style="font-size:12.5px">${esc(g.date)} · ${esc(g.away)} ${g.away_score} @ ${esc(g.home)} ${g.home_score} · ${esc(pickLabel(g, m))} <b class="${gr === 'win' ? 'mint' : gr === 'loss' ? 'clay' : ''}">${gr}</b></div>`).join('')}` : ''}
         <div class="kicker" style="color:var(--muted);margin:8px 0 4px">Recent games in the record</div>${(s.history || []).slice(0, 8).map((x) => `<div style="font-size:12.5px">${esc(x.date)} · ${esc(x.matchup)} · ${esc(x.pick)} <b class="${x.result === 'win' ? 'mint' : x.result === 'loss' ? 'clay' : ''}">${x.result}</b>${x.score ? ` <span class="dim">(${esc(x.score)})</span>` : ''}</div>`).join('')}
         ${s.rebuilt ? `<div class="dim" style="font-size:12px;margin-top:6px">Rebuilt here from nflverse: ${rec(s.rebuilt)} (Grok’s file: ${rec(s.record)}).</div>` : ''}</td></tr>` : ''}`;
+  }
+
+  const resRec = (b) => b.w + b.l ? `${b.w}–${b.l}${b.p ? '–' + b.p : ''}` : '—';
+  const resRate = (b) => b.w + b.l ? b.w / (b.w + b.l) : null;
+  function verdict(r) {
+    const a = r.after, be = BREAK_EVEN[r.kind];
+    if (r.kind === 'moneyline') { if (a.n < 60) return ['Too new to judge', '']; const roi = a.u / a.n; return roi > 0.02 ? ['Holding up', 'mint'] : roi > -0.02 ? ['About even', ''] : ['Faded', 'clay']; }
+    if (a.n < 60) return ['Too new to judge', ''];
+    const p = resRate(a); return p > be + 0.01 ? ['Holding up', 'mint'] : p > be - 0.01 ? ['About break-even', ''] : ['Faded', 'clay'];
+  }
+  function researchView() {
+    const cell = (b, kind) => kind === 'moneyline' ? `${resRec(b)}<div class="dim" style="font-size:12px">${b.n ? `${b.u >= 0 ? '+' : ''}${b.u.toFixed(1)}u · ${((b.u / b.n) * 100).toFixed(1)}% ROI` : ''}</div>` : `${resRec(b)}<div class="dim" style="font-size:12px">${pct(resRate(b), 1)}</div>`;
+    const nbaUp = researchUpcoming.NBA.map((g) => ({ g, m: RESEARCH.find((r) => r.id === 'r-nba-b2b-home').pick(g) })).filter((x) => x.m);
+    return `<p class="muted" style="margin-top:0">These come from published studies or a classic betting book, each with a reason to work and a publication year. That makes the seasons <b>after</b> publication a fair test: if a pattern was real and nobody priced it in, it should still beat break-even; if it was luck, or the books adjusted, it fades.</p>
+      <div class="card" style="padding:4px 12px;overflow-x:auto"><table class="t"><tr><th>System and source</th><th class="r">Before published</th><th class="r">Since published</th><th class="r">2026</th><th>Verdict</th></tr>
+      ${RESEARCH.map((r) => { const [v, c] = verdict(r); return `<tr><td><b>${esc(r.name)}</b> <span class="chip">${r.league}</span><div class="dim" style="font-size:12px"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.cite)}</a> · ${esc(r.why)}</div>${r.kind === 'teaser' ? `<div class="dim" style="font-size:12px">Leg break-even ${pct(BREAK_EVEN.teaser, 1)}.</div>` : ''}</td>
+        <td class="r num">${r.league === 'NBA' ? '<span class="dim">no history</span>' : cell(r.before, r.kind)}</td><td class="r num">${r.league === 'NBA' ? '<span class="dim">this season only</span>' : cell(r.after, r.kind)}</td><td class="r num">${cell(r.now, r.kind)}</td>
+        <td><span class="chip ${c}">${r.league === 'NBA' ? 'Tracking' : v}</span></td></tr>`; }).join('')}</table></div>
+      <p class="stamp">NFL: nflverse closing lines, 2002 to now. “Since published” runs from the publication season through 2026. NBA: this season only, at DraftKings closing lines, because free NBA history with lines isn’t available.</p>
+      ${nbaUp.length ? `<div class="sec"><h2>NBA back-to-back spots, next two days</h2><div class="grid g3">${nbaUp.map(({ g, m }) => `<div class="card"><div class="dim" style="font-size:12.5px">${esc(fmtDay(g.live.start_time))} ${esc(fmtTime(g.live.start_time))}</div><b>${esc(researchLabel(g, m, pickLabel))}</b><div class="dim" style="font-size:12.5px">${esc(g.home)} played yesterday; ${esc(g.away)} had ${g.away_rest - 1} day${g.away_rest - 1 === 1 ? '' : 's'} off</div></div>`).join('')}</div></div>` : ''}`;
   }
 
   function draw() {
@@ -133,15 +172,16 @@ export async function render(el) {
         ${gb.map((b) => `<div class="stat"><div class="k">Grok’s ${esc(b.label)} board</div><div class="v num">${rec(b.all)}</div><div class="s">badged ${rec(b.badged)} · ${b.note.includes('inside the record') ? 'inside its own record' : 'after the record'}</div></div>`).join('')}
       </div>
       <p class="dim" style="font-size:12.5px;margin:8px 0 0">Break-even at −110 is ${pct(BE, 1)}. ${lg === 'NFL' ? `Rebuild check: ${exact} of ${checked} NFL systems reproduce Grok’s record exactly, ${close} more within a few games.` : `College plays since found are graded at ESPN’s DraftKings closing line, on the ${after.NCAAF.length} games so far with a closing number (more are filled in each night). Previous-game situations only see games against FBS teams.`}</p></div>
-    <div class="row" style="margin-bottom:12px">${seg('lg', [['NFL', 'NFL'], ['NCAAF', 'College']], lg)} ${seg('tab', [['week', 'This week'], ['lib', 'Library']], st.tab)}</div>
-    ${st.tab === 'week' ? `<div class="grid g2">${board.map(({ g, hits, picks }) => {
+    <div class="row" style="margin-bottom:12px">${seg('lg', [['NFL', 'NFL'], ['NCAAF', 'College']], lg)} ${seg('tab', [['week', 'This week'], ['lib', 'Grok library'], ['research', 'Research systems']], st.tab)}</div>
+    ${st.tab === 'research' ? researchView() : st.tab === 'week' ? `<div class="grid g2">${board.map(({ g, hits, rhits, picks }) => {
         const lv = g.live, d = lv?.data;
         return `<div class="card ${picks[0] && picks[0][1].some((h) => h.s.qualified) ? 'hl' : ''}">
           <div class="row" style="justify-content:space-between;font-size:13px"><span>${lv ? `${esc(fmtDay(lv.start_time))} · ${esc(fmtTime(lv.start_time))}` : esc(g.date)}</span><span class="dim">${hits.length} system${hits.length === 1 ? '' : 's'}</span></div>
           <div class="team" style="margin-top:8px">${d ? logo(d.away) : ''}<b>${esc(d?.away?.short ?? g.away)}</b></div><div class="team" style="margin-top:4px">${d ? logo(d.home) : ''}<b>${d?.neutral || g.neutral ? 'vs' : '@'} ${esc(d?.home?.short ?? g.home)}</b> <span class="dim">${g.home} ${g.home_spread > 0 ? '+' : ''}${g.home_spread} · O/U ${g.total ?? '—'}</span></div>
           ${picks.map(([label, hs]) => `<div style="margin-top:10px"><div class="row" style="justify-content:space-between"><b>${esc(label)}</b><span class="chip ${hs.some((h) => h.s.qualified) ? 'gold' : ''}">${hs.length}</span></div>
             ${hs.slice(0, 4).map((h) => `<div class="dim" style="font-size:12.5px;padding:3px 0;border-top:1px solid var(--line)">${h.s.qualified ? '<b class="gold">Badged</b> · ' : ''}${esc(h.s.name)} · ${rec(h.s.record)} · since: <span class="${h.s.since.w + h.s.since.l ? (rate(h.s.since) > BE ? 'mint' : 'clay') : ''}">${rec(h.s.since)}</span></div>`).join('')}
-            ${hs.length > 4 ? `<div class="dim" style="font-size:12px">+ ${hs.length - 4} more</div>` : ''}</div>`).join('') || '<div class="dim" style="font-size:12.5px;margin-top:8px">No systems fit this game.</div>'}
+            ${hs.length > 4 ? `<div class="dim" style="font-size:12px">+ ${hs.length - 4} more</div>` : ''}</div>`).join('') || '<div class="dim" style="font-size:12.5px;margin-top:8px">No Grok systems fit this game.</div>'}
+          ${rhits.length ? `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--line2)"><div class="kicker" style="color:var(--sky);margin-bottom:4px">Research systems</div>${rhits.map((x) => `<div style="font-size:12.5px;padding:2px 0"><b>${esc(x.label)}</b> <span class="dim">· ${esc(x.r.name)} · since published ${resRec(x.r.after)}</span></div>`).join('')}</div>` : ''}
         </div>`; }).join('') || '<div class="empty">No games with lines yet.</div>'}</div>`
     : `<div class="row" style="margin-bottom:10px">${seg('kind', [['all', 'All'], ['spread', 'Spread'], ['total', 'Total'], ['moneyline', 'Moneyline']], st.kind)} ${seg('tier', [['all', 'All tiers'], ['badged', 'Badged'], ['library', 'Library']], st.tier)}
         <input data-act="q" placeholder="Search systems" value="${esc(st.q)}" style="min-width:200px"></div>
