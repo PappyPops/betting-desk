@@ -1,4 +1,4 @@
-import { games, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn } from './core.js?v=202611162211';
+import { games, api, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn } from './core.js?v=202611162225';
 
 // Edges a projection needs over the DraftKings number before it counts as a lock.
 const EDGE = { pre: 5, q1: 6, half: 6, q3: 5 };
@@ -42,11 +42,11 @@ function grade(lean, ln, final) { const d = final - ln; if (d === 0) return 'P';
 
 export async function render(el) {
   const st = { start: store.get('paint:start', 'all'), ev: 'all' };
-  let all = [];
+  let all = [], breaks = [];
 
   async function load(quiet) {
     if (!quiet) el.innerHTML = '<div class="loading">Running the numbers…</div>';
-    all = await games({ league: 'nba', from: '2026-10-01', ttl: 60_000 });
+    [all, breaks] = await Promise.all([games({ league: 'nba', from: '2026-10-01', ttl: 60_000 }), api('break_lines?select=*&live_total=not.is.null&limit=10000', { ttl: 60_000 }).catch(() => [])]);
     draw();
   }
 
@@ -55,6 +55,11 @@ export async function render(el) {
     const finals = all.filter((g) => g.state === 'post' && g.home_score !== null).sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
     // backtest: every final this season, ratings from earlier games only, against the closing total
     const book = Object.fromEntries(STAGES.map(([k]) => [k, { w: 0, l: 0, p: 0, ow: 0, ol: 0 }]));
+    const BR = new Map(); for (const r of breaks) { if (!BR.has(r.espn_id)) BR.set(r.espn_id, {}); BR.get(r.espn_id)[r.period] = r; }
+    const blank = () => ({ w: 0, l: 0, p: 0 });
+    // quarter breaks: the projection at that moment against DraftKings' live line at that moment
+    const brk = Object.fromEntries(STAGES.slice(1).map(([k]) => [k, { n: 0, all: blank(), lock: blank(), closer: 0, ties: 0, err: 0, lerr: 0, sAll: blank(), sLock: blank() }]));
+    const tally = (b, r) => { if (r === 'W') b.w++; else if (r === 'L') b.l++; else b.p++; };
     const sp = { w: 0, l: 0, p: 0 };
     const ydayKey = new Date(now - 86400e3).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
     const yday = [];
@@ -66,8 +71,20 @@ export async function render(el) {
       const fin = g.home_score + g.away_score;
       const res = {};
       for (const [k, , mins] of STAGES) {
-        const ptsNow = thru(g.data.home.lines, mins / 12) + thru(g.data.away.lines, mins / 12);
-        const p = k === 'pre' ? pr.total : liveProj(pr.total, ptsNow, mins);
+        if (k !== 'pre') {
+          const br = BR.get(g.id)?.[mins / 12]; if (!br) continue;
+          const b = brk[k], lt = Number(br.live_total), now2 = br.home_pts + br.away_pts;
+          const p = liveProj(pr.total, now2, mins), left = (48 - mins) / 48;
+          b.n++; b.err += Math.abs(p - fin); b.lerr += Math.abs(lt - fin);
+          if (Math.abs(p - fin) < Math.abs(lt - fin)) b.closer++; else if (Math.abs(p - fin) === Math.abs(lt - fin)) b.ties++;
+          if (p !== lt) { const lean = p > lt ? 'Over' : 'Under', r = grade(lean, lt, fin); tally(b.all, r); if (Math.abs(p - lt) >= EDGE[k]) { tally(b.lock, r); res[k] = { lean, p, r, lt }; } }
+          if (br.live_spread_home !== null) {
+            const ls = Number(br.live_spread_home), pm = (br.home_pts - br.away_pts) + left * pr.margin, x = pm + ls;
+            if (x !== 0) { const m = (g.home_score - g.away_score) + ls; const r = m === 0 ? 'P' : (m > 0) === (x > 0) ? 'W' : 'L'; tally(b.sAll, r); if (Math.abs(x) >= SPREAD_EDGE) tally(b.sLock, r); }
+          }
+          continue;
+        }
+        const p = pr.total;
         if (Math.abs(p - ln) < EDGE[k]) continue;
         const lean = p > ln ? 'Over' : 'Under', r = grade(lean, ln, fin);
         const b = book[k]; if (r === 'W') b.w++; else if (r === 'L') b.l++; else b.p++;
@@ -98,9 +115,12 @@ export async function render(el) {
         const mins = Math.min(48, (per - 1) * 12 + (12 - (mm + (ss || 0) / 60)));
         projT = liveProj(pr.total, (d.home.score || 0) + (d.away.score || 0), mins); stage = d.detail;
       }
-      const edge = projT !== null && ln !== null ? projT - ln : null;
-      const need = kind === 'live' ? EDGE.half : EDGE.pre;
+      const edge = kind === 'pre' && projT !== null && ln !== null ? projT - ln : null;
+      const need = EDGE.pre;
       const lean = edge !== null && Math.abs(edge) >= need ? (edge > 0 ? 'Over' : 'Under') : null;
+      // latest quarter break with a logged DraftKings live line
+      let bk = null;
+      if (kind === 'live' && pr) { const rows = BR.get(g.id) || {}; const pk = [3, 2, 1].find((q) => rows[q]); if (pk) { const r = rows[pk], st2 = STAGES[pk]; const pj = liveProj(pr.total, r.home_pts + r.away_pts, pk * 12); const e = pj - Number(r.live_total); bk = { lab: st2[1], k: st2[0], lt: Number(r.live_total), pj, e, lean: Math.abs(e) >= EDGE[st2[0]] ? (e > 0 ? 'Over' : 'Under') : null, ls: r.live_spread_home, pm: (r.home_pts - r.away_pts) + ((48 - pk * 12) / 48) * pr.margin }; } }
       const spLean = pr && spH !== null && Math.abs(pr.margin + spH) >= SPREAD_EDGE ? (pr.margin + spH > 0 ? d.home : d.away) : null;
       const spLine = spLean ? (spLean === d.home ? spH : -spH) : null;
       return `<div class="card ${lean ? 'hl' : ''}">
@@ -111,7 +131,7 @@ export async function render(el) {
           <div class="stat"><div class="k">${kind === 'live' ? 'Pregame total' : 'DK total'}</div><div class="v num" style="font-size:24px">${ln ?? '—'}</div></div>
           <div class="stat"><div class="k">Projected</div><div class="v num" style="font-size:24px">${projT !== null ? projT.toFixed(1) : '—'}</div></div>
           <div class="stat"><div class="k">Edge</div><div class="v num ${lean ? 'gold' : 'dim'}" style="font-size:24px">${edge !== null ? sgn(edge) : '—'}</div></div></div>
-        ${kind === 'live' ? `<div class="dim" style="font-size:12.5px;margin-top:8px">Projected final from the score so far. The pregame total is shown for reference only; compare the projection with the live total at your book.</div>`
+        ${kind === 'live' ? (bk ? `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--line2);font-size:13px"><b>${esc(bk.lab)}:</b> DraftKings live total <b class="num">${bk.lt}</b>, projected <b class="num">${bk.pj.toFixed(1)}</b> (${sgn(bk.e)}) ${bk.lean ? `<span class="chip gold">${bk.lean} ${bk.lt}</span>` : `<span class="dim">no lock, needs ${EDGE[bk.k]}+</span>`}${bk.ls !== null ? `<div class="dim" style="font-size:12.5px">Live spread ${esc(d.home.abbr)} ${line(Number(bk.ls))}; projected margin ${esc(d.home.abbr)} ${sgn(bk.pm, 1)}</div>` : ''}</div>` : `<div class="dim" style="font-size:12.5px;margin-top:8px">Projected final from the score so far. DraftKings’ live line is saved at each quarter break and compared here.</div>`)
           : lean ? `<div style="margin-top:8px"><span class="chip gold">${lean} ${ln}</span></div>` : `<div class="dim" style="font-size:12.5px;margin-top:8px">${pr ? `No total lock. Needs ${need}+ points of edge.` : 'Not enough games yet to project.'}</div>`}
         ${kind === 'pre' && spLean ? `<div class="dim" style="font-size:12.5px;margin-top:4px">Spread lean: <b class="muted">${esc(spLean.short)} ${line(spLine)}</b> (projected margin ${sgn(pr.margin, 1)} for ${esc(d.home.abbr)})</div>` : ''}
       </div>`;
@@ -123,15 +143,20 @@ export async function render(el) {
     ${howTo('How it works', `<ol>
       <li><b>Before tip:</b> each team’s scoring and points allowed this season, weighted toward recent games and pulled toward league average early on, plus home court. A lock needs ${EDGE.pre}+ points of edge.</li>
       <li><b>At each break:</b> points so far plus a projection for the rest, leaning more on the live pace as the game goes on. Locks need ${EDGE.q1}+ (1Q, half) or ${EDGE.q3}+ (3Q).</li>
-      <li><b>The book</b> grades every pregame lock this season against the closing total, using only games played before that day. At −110 you need ${pct(BE, 1)}. Quarter-break locks will be graded once enough live totals have been logged.</li></ol>`, 'paint')}
+      <li><b>The book</b> grades every pregame lock this season against the closing total, using only games played before that day. At −110 you need ${pct(BE, 1)}. Quarter-break projections are graded against DraftKings’ live line saved at that break.</li></ol>`, 'paint')}
     <div class="sec" style="margin-top:0"><h2>The book</h2><p class="sub">Every pregame lock this season, using only games played before that day, graded against the DraftKings close.</p>
     <div class="grid g4">
       <div class="card stat"><div class="k">Pregame totals</div><div class="v num">${rec(book.pre)}</div><div class="s ${rp(book.pre) !== null && rp(book.pre) > BE ? 'mint' : 'clay'}">${pct(rp(book.pre), 1)} · break-even ${pct(BE, 1)}</div></div>
       <div class="card stat"><div class="k">Pregame overs</div><div class="v num">${book.pre.ow + book.pre.ol ? `${book.pre.ow}–${book.pre.ol}` : '—'}</div><div class="s">unders ${book.pre.w - book.pre.ow}–${book.pre.l - book.pre.ol}</div></div>
       <div class="card stat"><div class="k">Spread leans</div><div class="v num">${rec(sp)}</div><div class="s">${pct(rp(sp), 1)} · ${SPREAD_EDGE}+ points off the close</div></div>
-      <div class="card stat"><div class="k">Quarter breaks</div><div class="v" style="font-size:20px;line-height:1.2">Not graded yet</div><div class="s">needs the live line at that moment</div></div>
+      <div class="card stat"><div class="k">Halftime locks</div><div class="v num">${rec(brk.half.lock)}</div><div class="s">vs the live total · ${brk.half.n} halves logged</div></div>
     </div>
-    <p class="stamp">Why quarter breaks aren’t graded: by the end of the 3rd quarter most of the score is known, so grading against the pregame total wins almost every time (it would show about ${pct(rp(book.q3), 0)} here). That’s how the old version got End 3Q Overs at 55–4. Live totals from Action Network are now being logged every 10 minutes so these can be graded against the real number going forward.</p></div>
+    </div>
+    <div class="sec"><h2>At the breaks</h2><p class="sub">At the end of the 1st, at halftime and at the end of the 3rd, the projected final is saved next to DraftKings’ live total and spread at that moment, then graded when the game ends.</p>
+    <div class="card" style="padding:4px 12px;overflow-x:auto"><table class="t"><tr><th>Break</th><th class="r">Games</th><th class="r">Total, every game</th><th class="r">Total locks</th><th class="r">Projection closer than the line</th><th class="r">Spread, every game</th><th class="r">Spread ${SPREAD_EDGE}+</th></tr>
+    ${STAGES.slice(1).map(([k, lab]) => { const b = brk[k]; const c = (x) => `${rec(x)}<div class="dim" style="font-size:12px">${pct(rp(x), 1)}</div>`; return `<tr><td><b>${lab}</b><div class="dim" style="font-size:12px">lock at ${EDGE[k]}+ points</div></td><td class="r num">${b.n}</td><td class="r num">${c(b.all)}</td><td class="r num">${c(b.lock)}</td>
+      <td class="r num">${b.n ? `${b.closer} of ${b.n}<div class="dim" style="font-size:12px">avg miss ${(b.err / b.n).toFixed(1)} vs line ${(b.lerr / b.n).toFixed(1)}</div>` : '—'}</td><td class="r num">${c(b.sAll)}</td><td class="r num">${c(b.sLock)}</td></tr>`; }).join('')}</table></div>
+    <p class="stamp">Started logging Nov 16, 2026, so this fills in game by game. Break-even ${pct(BE, 1)} at −110. “Every game” takes whichever side the projection points to, however small the gap; “locks” only count when the gap clears the threshold. Lines: ESPN’s “DraftKings – Live Odds” feed, checked every minute during games.</p></div>
     ${live.length ? `<div class="sec"><h2>On the floor</h2><div class="grid g2">${live.map((g) => gameCard(g, 'live')).join('')}</div></div>` : ''}
     <div class="sec"><div class="row" style="justify-content:space-between"><h2>Next three days</h2>${seg('start', [['all', 'All'], ['early', 'Before 8 ET'], ['late', '8 ET or later']], st.start)}</div>
       <div class="grid g2">${upcoming.map((g) => gameCard(g, 'pre')).join('') || '<div class="empty">No games posted yet.</div>'}</div></div>
