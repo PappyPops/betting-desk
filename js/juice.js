@@ -1,4 +1,4 @@
-import { api, esc, seg, onSeg, store, pct, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, decOdds } from './core.js?v=202611162122';
+import { api, esc, seg, onSeg, store, pct, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, decOdds } from './core.js?v=202611162123';
 
 const LGS = [['nfl', 'NFL'], ['cfb', 'College'], ['nba', 'NBA']];
 const MK = { sp: 'Spread', tot: 'Total', ml: 'Moneyline' };
@@ -11,7 +11,7 @@ function sideName(d, market, s) {
 }
 function lineTxt(market, v, s) {
   if (v === null || v === undefined) return '—';
-  if (market === 'tot') return `${s === 'a' ? 'O' : 'U'} ${v}`;
+  if (market === 'tot') return String(v);
   if (market === 'ml') return odds(v);
   return line(v);
 }

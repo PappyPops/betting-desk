@@ -1,4 +1,4 @@
-import { games, esc, logo, line, sgn, fmtTime, fmtDay, footNote, lastSync, ago, clearCache } from './core.js?v=202611162122';
+import { games, esc, logo, line, sgn, fmtTime, fmtDay, footNote, lastSync, ago, clearCache } from './core.js?v=202611162123';
 
 const LG = { nfl: 'NFL', cfb: 'College', nba: 'NBA' };
 
