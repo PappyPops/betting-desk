@@ -1,9 +1,9 @@
 // Best bets: every tool's current reads on the same games, weighted by how each tool has actually done on games
 // it hadn't seen yet. A source with no record, or a record under break-even, gets no weight.
-import { api, games } from './core.js?v=202611171318';
-import { matrixData } from './matrix.js?v=202611171318';
-import { RESEARCH, BREAK_EVEN } from './research.js?v=202611171318';
-import { CUTS, grade as cutGrade } from './linelife.js?v=202611171318';
+import { api, games } from './core.js?v=202611171320';
+import { matrixData } from './matrix.js?v=202611171320';
+import { RESEARCH, BREAK_EVEN } from './research.js?v=202611171320';
+import { CUTS, grade as cutGrade } from './linelife.js?v=202611171320';
 
 const BE = 110 / 210;
 const K = 150; // shrink each record toward break-even as if it had 150 more games at exactly break-even
@@ -101,7 +101,7 @@ export async function bestBets() {
     const r = gradeFlags(await loadFlags(recent)).all ?? { w: 0, l: 0 };
     const src = { id: 'moves', name: 'Line Life: line moved toward this side', short: 'Line Life', w: r.w, l: r.l, edge: edgeOf(r.w, r.l), note: `flags so far ${r.w}–${r.l}` };
     sources.push(src);
-    for (const g of G.values()) if (pre(g.id)) for (const f of flagNow(g)) add(src, g.id, f.mk, f.side);
+    for (const g of G.values()) if (pre(g.id)) for (const f of flagNow(g)) if (historyNote(g.league, f)?.tone !== 'clay') add(src, g.id, f.mk, f.side);
   }
 
   // combine: the strongest source counts in full, each extra agreeing source a quarter, opposing sources subtract
