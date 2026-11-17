@@ -1,6 +1,7 @@
-import { games as loadGames, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, logo } from './core.js?v=202611162208';
-import { nflHist } from './hist.js?v=202611162208';
-import { makeContext, parseSystem, matchSystem, gradePick, pickLabel } from './systems.js?v=202611162208';
+import { games as loadGames, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, logo } from './core.js?v=202611162210';
+import { nflHist } from './hist.js?v=202611162210';
+import { makeContext, parseSystem, matchSystem, gradePick, pickLabel } from './systems.js?v=202611162210';
+import { RESEARCH, gradeResearch, researchLabel, BREAK_EVEN, nbaGames } from './research.js?v=202611162210';
 
 const NFL_IN_RECORD = (g) => g.season < 2026 || (g.season === 2026 && g.week <= 9); // Grok's NFL records run through 2026 week 9
 const CFB_FROM_WEEK = 5; // Grok's college records run through 2026 week 4
