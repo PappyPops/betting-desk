@@ -1,4 +1,4 @@
-import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611162141';
+import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611162143';
 
 const LGS = [['nfl', 'NFL'], ['cfb', 'College'], ['nba', 'NBA']];
 const SRC = { action: 'Action', docs: 'Doc’s', espn: 'ESPN' };
@@ -18,7 +18,8 @@ export async function render(el) {
       api('experts?select=*', { ttl: 600_000 }),
       api('blobs?key=in.(action:experts,picks:other)&select=key,data', { ttl: 60_000 }),
     ]);
-    picks = p.filter((k) => k.espn_id); experts = new Map(ex.map((e) => [e.id, e]));
+    // full-game sides only: first-half, quarter and team-total picks aren't the same bet
+    picks = p.filter((k) => k.espn_id && !/\((1H|2H|1Q|2Q|3Q|4Q|1P|2P|3P)\)/i.test(k.play || '')); experts = new Map(ex.map((e) => [e.id, e]));
     at = meta.map((m) => m.data?.at).filter(Boolean).sort().pop(); at = at ? new Date(at) : null;
     const gids = [...new Set(picks.map((x) => x.espn_id))];
     games = new Map();
