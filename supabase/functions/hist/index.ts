@@ -3,8 +3,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
 
 const URL_GAMES = 'https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv';
-const COLS = ['season','game_type','week','gameday','weekday','gametime','away_team','away_score','home_team','home_score','location','result','total','overtime','away_rest','home_rest','away_moneyline','home_moneyline','spread_line','total_line','div_game','roof','surface','temp','wind','espn'];
-const TEXT = ['game_type','gameday','weekday','gametime','away_team','home_team','location','roof','surface','espn'];
+const COLS = ['season','game_type','week','gameday','weekday','gametime','away_team','away_score','home_team','home_score','location','result','total','overtime','away_rest','home_rest','away_moneyline','home_moneyline','spread_line','total_line','div_game','roof','surface','temp','wind','espn','home_qb_id','away_qb_id','home_coach','away_coach','over_odds','under_odds'];
+const TEXT = ['game_type','gameday','weekday','gametime','away_team','home_team','location','roof','surface','espn','home_qb_id','away_qb_id','home_coach','away_coach'];
 
 function parseCSV(text: string) {
   const lines = text.split(/\r?\n/).filter(Boolean);

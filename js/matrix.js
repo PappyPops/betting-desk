@@ -1,177 +1,159 @@
-import { games, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache } from './core.js?v=202611162143';
-import { nflHist, teamRows } from './hist.js?v=202611162143';
+import { games as loadGames, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, logo } from './core.js?v=202611162200';
+import { nflHist } from './hist.js?v=202611162200';
+import { makeContext, parseSystem, matchSystem, gradePick, pickLabel } from './systems.js?v=202611162200';
 
-// Building blocks. Angles are 2–3 of these from different families.
-const ATOMS = [
-  ['loc', 'home', 'Home', (r) => r.home], ['loc', 'away', 'Road', (r) => !r.home && !r.neutral],
-  ['role', 'fav', 'Favorite', (r) => r.fav], ['role', 'dog', 'Underdog', (r) => r.dog],
-  ['size', 'small', 'Spread 3 or less', (r) => r.spread !== null && Math.abs(r.spread) <= 3], ['size', 'mid', 'Spread 3.5–6.5', (r) => r.spread !== null && Math.abs(r.spread) >= 3.5 && Math.abs(r.spread) <= 6.5], ['size', 'big', 'Spread 7+', (r) => r.spread !== null && Math.abs(r.spread) >= 7],
-  ['div', 'div', 'Division game', (r) => r.div], ['div', 'nondiv', 'Non-division', (r) => !r.div],
-  ['slot', 'prime', 'Prime time', (r) => r.hour !== null && r.hour >= 20], ['slot', 'early', '1 PM slot', (r) => r.hour !== null && r.hour < 15 && r.weekday === 'Sunday'], ['slot', 'late', 'Late afternoon', (r) => r.hour !== null && r.hour >= 15 && r.hour < 20 && r.weekday === 'Sunday'],
-  ['rest', 'restadv', 'Rest edge 3+ days', (r) => r.rest !== null && r.oppRest !== null && r.rest - r.oppRest >= 3], ['rest', 'restdis', 'Rest deficit 3+ days', (r) => r.rest !== null && r.oppRest !== null && r.rest - r.oppRest <= -3], ['rest', 'bye', 'Off a bye', (r) => r.rest !== null && r.rest >= 13],
-  ['prev', 'pcov', 'Covered last week by 10+', (r) => r.prevAts !== null && r.prevAts >= 10], ['prev', 'pmiss', 'Missed last week by 10+', (r) => r.prevAts !== null && r.prevAts <= -10],
-  ['pwl', 'pwin', 'Won last game', (r) => r.prevMargin !== null && r.prevMargin > 0], ['pwl', 'ploss', 'Lost last game', (r) => r.prevMargin !== null && r.prevMargin < 0],
-  ['phase', 'wk1', 'Weeks 1–4', (r) => r.week <= 4], ['phase', 'wk2', 'Weeks 5–12', (r) => r.week >= 5 && r.week <= 12], ['phase', 'wk3', 'Weeks 13+', (r) => r.week >= 13],
-  ['tot', 'tothi', 'Total 47+', (r) => r.total !== null && r.total >= 47], ['tot', 'totlo', 'Total 41 or less', (r) => r.total !== null && r.total <= 41],
-];
-const BAR = 0.57, MIN_HALF = 35, MIN_ALL = 90;
+const NFL_IN_RECORD = (g) => g.season < 2026 || (g.season === 2026 && g.week <= 9); // Grok's NFL records run through 2026 week 9
+const CFB_FROM_WEEK = 5; // Grok's college records run through 2026 week 4
+const rec = (r) => r.w + r.l ? `${r.w}–${r.l}${r.p ? '–' + r.p : ''}` : '—';
+const rate = (r) => r.w + r.l ? r.w / (r.w + r.l) : null;
+const BE = 110 / 210;
 
-const W = (n) => Math.ceil(n / 32);
-function bits(n) { return new Uint32Array(W(n)); }
-function set(b, i) { b[i >>> 5] |= 1 << (i & 31); }
-function has(b, i) { return (b[i >>> 5] >>> (i & 31)) & 1; }
-function pop(x) { x -= (x >>> 1) & 0x55555555; x = (x & 0x33333333) + ((x >>> 2) & 0x33333333); return (((x + (x >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24; }
-function andCount(a, b) { let s = 0; for (let i = 0; i < a.length; i++) s += pop(a[i] & b[i]); return s; }
-
-function build(rows) {
-  const n = rows.length;
-  const atomBits = ATOMS.map(([, , , f]) => { const b = bits(n); rows.forEach((r, i) => { if (f(r)) set(b, i); }); return b; });
-  return { n, atomBits };
+let dataMemo = null;
+async function systemsFile() {
+  if (!dataMemo) { const r = await fetch('data/matrix-systems.json'); if (!r.ok) throw new Error('Matrix systems file missing'); dataMemo = await r.json(); }
+  return dataMemo;
 }
 
-function evaluate(rows, atomBits, cover) {
-  // cover: per-row 1 (covered) / 0 (missed) / -1 (push or unknown)
-  const n = rows.length;
-  const mk = (pred) => { const b = bits(n); rows.forEach((r, i) => { if (pred(r, i)) set(b, i); }); return b; };
-  const decA = mk((r, i) => cover[i] >= 0 && r.season <= 2013), decB = mk((r, i) => cover[i] >= 0 && r.season >= 2014 && r.season <= 2025);
-  const winA = mk((r, i) => cover[i] === 1 && r.season <= 2013), winB = mk((r, i) => cover[i] === 1 && r.season >= 2014 && r.season <= 2025);
-  const dec26 = mk((r, i) => cover[i] >= 0 && r.season === 2026), win26 = mk((r, i) => cover[i] === 1 && r.season === 2026);
-  const out = [];
-  const fam = ATOMS.map((a) => a[0]);
-  const tmp = bits(n);
-  const consider = (ids) => {
-    tmp.fill(0xffffffff);
-    for (const id of ids) { const b = atomBits[id]; for (let i = 0; i < tmp.length; i++) tmp[i] &= b[i]; }
-    const ones = tmp;
-    const dA = andCount(ones, decA), dB = andCount(ones, decB);
-    if (dA < MIN_HALF || dB < MIN_HALF || dA + dB < MIN_ALL) return;
-    const wA = andCount(ones, winA), wB = andCount(ones, winB);
-    const pA = wA / dA, pB = wB / dB;
-    let kind = null;
-    if (pA >= BAR && pB >= BAR) kind = 'play'; else if (pA <= 1 - BAR && pB <= 1 - BAR) kind = 'fade';
-    if (!kind) return;
-    const d26 = andCount(ones, dec26), w26 = andCount(ones, win26);
-    out.push({ ids: [...ids], kind, wA, dA, wB, dB, w: wA + wB, d: dA + dB, w26, d26, mask: Uint32Array.from(ones) });
-  };
-  let tested = 0;
-  for (let i = 0; i < ATOMS.length; i++) for (let j = i + 1; j < ATOMS.length; j++) {
-    if (fam[i] === fam[j]) continue;
-    tested++; consider([i, j]);
-    for (let k = j + 1; k < ATOMS.length; k++) { if (fam[k] === fam[i] || fam[k] === fam[j]) continue; tested++; consider([i, j, k]); }
-  }
-  return { angles: out, tested };
+function nflGames(hist, liveById) {
+  return hist.games.filter((h) => h.game_type === 'REG').map((h) => {
+    const lv = h.espn ? liveById.get(String(h.espn)) : null;
+    const pre = !h.done;
+    const ml = (v) => v != null && Math.abs(v) >= 100 ? v : null;
+    return {
+      id: `${h.season}_${h.week}_${h.away_team}_${h.home_team}`, espn: h.espn, season: h.season, week: h.week, date: h.gameday, weekday: h.weekday, time: h.gametime || '',
+      home: h.home_team, away: h.away_team, home_score: h.home_score, away_score: h.away_score,
+      home_spread: pre && lv?.spread_home != null ? Number(lv.spread_home) : h.hspread, total: pre && lv?.total != null ? Number(lv.total) : h.total_line,
+      home_ml: pre && lv?.ml_home != null ? lv.ml_home : ml(h.home_moneyline), away_ml: pre && lv?.ml_away != null ? lv.ml_away : ml(h.away_moneyline),
+      div: h.div_game === 1, neutral: h.location === 'Neutral', home_rest: h.home_rest, away_rest: h.away_rest, temp: h.temp, roof: h.roof, surface: h.surface, wind: h.wind,
+      overtime: h.overtime === 1, home_qb: h.home_qb_id, away_qb: h.away_qb_id, home_coach: h.home_coach, away_coach: h.away_coach, final: h.done, live: lv,
+    };
+  });
+}
+function cfbGames(rows) {
+  const et = (iso, o) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', ...o }).format(new Date(iso));
+  return rows.map((r) => {
+    const fin = r.state === 'post', pre = r.state === 'pre';
+    const sp = fin ? (r.close_spread_home != null ? Number(r.close_spread_home) : null) : pre && r.spread_home != null ? Number(r.spread_home) : null;
+    const tot = fin ? (r.close_total > 0 ? Number(r.close_total) : null) : pre && r.total != null ? Number(r.total) : null;
+    return {
+      id: r.id, espn: r.id, season: 2026, week: r.week, date: et(r.start_time, { year: 'numeric', month: '2-digit', day: '2-digit' }), weekday: new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'long' }).format(new Date(r.start_time)),
+      time: et(r.start_time, { hour: '2-digit', minute: '2-digit', hour12: false }), home: r.home, away: r.away, home_score: r.home_score, away_score: r.away_score,
+      home_spread: sp, total: tot, conf: !!r.data?.conf, neutral: !!r.data?.neutral, final: fin && r.home_score != null, live: r,
+    };
+  });
 }
 
 export async function render(el) {
-  const st = { tab: store.get('mx:tab', 'board') };
-  el.innerHTML = '<div class="loading">Grading 24 years of NFL lines…</div>';
+  const st = { tab: store.get('mx2:tab', 'week'), lg: store.get('mx2:lg', 'NFL'), kind: 'all', tier: 'all', q: '', open: null };
+  el.innerHTML = '<div class="loading">Loading 464 systems and rebuilding every rule…</div>';
   const now = new Date();
-  const [h, live] = await Promise.all([nflHist(), games({ league: 'nfl', from: new Date(now.getTime() - 6 * 3600e3).toISOString(), to: new Date(now.getTime() + 12 * 86400e3).toISOString() })]);
-  // use the live DraftKings spread for games not yet played
-  const liveById = new Map(live.map((g) => [g.id, g]));
-  const hg = h.games.map((g) => {
-    const lv = g.espn && liveById.get(String(g.espn));
-    if (!g.done && lv && lv.spread_home !== null) return { ...g, hspread: Number(lv.spread_home), total_line: lv.total !== null ? Number(lv.total) : g.total_line, _live: lv };
-    return { ...g, _live: lv };
-  });
-  const rows = teamRows(hg).filter((r) => r.reg && r.spread !== null);
-  const cover = rows.map((r) => r.ats === null ? -1 : r.ats > 0 ? 1 : r.ats < 0 ? 0 : -1);
-  const { atomBits } = build(rows);
+  const [file, hist, nflLive, cfbRows] = await Promise.all([
+    systemsFile(), nflHist(),
+    loadGames({ league: 'nfl', from: new Date(now.getTime() - 6 * 3600e3).toISOString(), to: new Date(now.getTime() + 12 * 86400e3).toISOString() }),
+    loadGames({ league: 'cfb', from: '2026-08-01', ttl: 300_000 }),
+  ]);
   await new Promise((r) => setTimeout(r, 0));
-  const res = evaluate(rows, atomBits, cover);
-  // luck check: same test on coin-flip results (keeping each game's two sides opposite)
-  let luck = 0;
-  for (let s = 0; s < 4; s++) {
-    const flip = new Map();
-    const fake = rows.map((r, i) => {
-      if (cover[i] === -1) return -1;
-      const k = r.g; if (!flip.has(k)) flip.set(k, Math.random() < 0.5 ? 1 : 0);
-      return r.side === 'home' ? flip.get(k) : 1 - flip.get(k);
-    });
-    luck += evaluate(rows, atomBits, fake).angles.length / 4;
+  const liveById = new Map(nflLive.map((g) => [g.id, g]));
+  const NG = nflGames(hist, liveById), CG = cfbGames(cfbRows);
+  const ctx = { NFL: makeContext(NG, 'nfl'), NCAAF: makeContext(CG, 'cfb') };
+  const systems = file.systems.map((s) => ({ ...s, parsed: parseSystem(s) }));
+  const caches = { NFL: new Map(), NCAAF: new Map() };
+
+  // ---- self-check: rebuild every NFL record and compare with Grok's ----
+  let exact = 0, close = 0, checked = 0;
+  const nflIn = NG.filter((g) => g.final && NFL_IN_RECORD(g));
+  for (const s of systems.filter((x) => x.league === 'NFL')) {
+    const r = { w: 0, l: 0, p: 0 }; let ok = true;
+    for (const g of nflIn) { const m = matchSystem(ctx.NFL, s, s.parsed, g, caches.NFL); if (m === undefined) { ok = false; break; } if (!m) continue; const gr = gradePick(g, m); if (gr === 'win') r.w++; else if (gr === 'loss') r.l++; else if (gr === 'push') r.p++; }
+    if (!ok) continue; checked++;
+    s.rebuilt = r;
+    const d = Math.abs(r.w - s.record.w) + Math.abs(r.l - s.record.l);
+    if (d === 0) exact++; else { if (d <= Math.max(2, 0.05 * (s.record.w + s.record.l))) close++; else console.debug('matrix rebuild differs', s.key, s.record, r); }
   }
 
-  // upcoming week
-  const pre = rows.map((r, i) => ({ r, i })).filter(({ r }) => r.season === 2026 && !r.g.done && r.g._live && r.g._live.state === 'pre');
-  const nextWeek = Math.min(...pre.map(({ r }) => r.week));
-  const weekRows = pre.filter(({ r }) => r.week === nextWeek);
-  const sideAngles = (i) => res.angles.filter((a) => has(a.mask, i));
-  const games2 = new Map();
-  for (const { r, i } of weekRows) {
-    const key = r.g.espn;
-    if (!games2.has(key)) games2.set(key, { g: r.g, sides: {} });
-    const a = sideAngles(i);
-    games2.get(key).sides[r.side] = { r, plays: a.filter((x) => x.kind === 'play'), fades: a.filter((x) => x.kind === 'fade') };
+  // ---- since found: every game after the records were built ----
+  const after = { NFL: NG.filter((g) => g.final && !NFL_IN_RECORD(g) && g.season === 2026), NCAAF: CG.filter((g) => g.final && g.week >= CFB_FROM_WEEK && g.home_spread != null) };
+  const sinceAll = { NFL: { w: 0, l: 0, p: 0 }, NCAAF: { w: 0, l: 0, p: 0 } }, sinceBadged = { NFL: { w: 0, l: 0, p: 0 }, NCAAF: { w: 0, l: 0, p: 0 } };
+  for (const s of systems) {
+    s.since = { w: 0, l: 0, p: 0, games: [] };
+    for (const g of after[s.league]) {
+      const m = matchSystem(ctx[s.league], s, s.parsed, g, caches[s.league]); if (!m) continue;
+      const gr = gradePick(g, m); if (!gr) continue;
+      s.since[gr === 'win' ? 'w' : gr === 'loss' ? 'l' : 'p']++;
+      s.since.games.push({ g, m, gr });
+      const t = sinceAll[s.league]; t[gr === 'win' ? 'w' : gr === 'loss' ? 'l' : 'p']++;
+      if (s.qualified) { const b = sinceBadged[s.league]; b[gr === 'win' ? 'w' : gr === 'loss' ? 'l' : 'p']++; }
+    }
   }
-  // score each side: its plays + the other side's fades
-  const cards = [...games2.values()].map((x) => {
-    const H = x.sides.home, A = x.sides.away;
-    const score = (me, op) => (me?.plays.length || 0) + (op?.fades.length || 0);
-    const sh = score(H, A), sa = score(A, H);
-    return { ...x, sh, sa, lean: sh > sa ? 'home' : sa > sh ? 'away' : null, gap: Math.abs(sh - sa) };
-  }).sort((a, b) => new Date(a.g._live.start_time) - new Date(b.g._live.start_time));
+  const cfbWeeks = [...new Set(after.NCAAF.map((g) => g.week))].sort((a, b) => a - b);
+  const nflWeeks = [...new Set(after.NFL.map((g) => g.week))].sort((a, b) => a - b);
 
-  // this season: did the side with more agreeing angles cover?
-  let sw = 0, sl = 0;
-  const byGame = new Map();
-  rows.forEach((r, i) => { if (r.season === 2026 && r.g.done) { const k = r.g; if (!byGame.has(k)) byGame.set(k, {}); byGame.get(k)[r.side] = i; } });
-  for (const [, s] of byGame) {
-    if (s.home === undefined || s.away === undefined) continue;
-    const cnt = (me, op) => sideAngles(me).filter((a) => a.kind === 'play').length + sideAngles(op).filter((a) => a.kind === 'fade').length;
-    const ch = cnt(s.home, s.away), ca = cnt(s.away, s.home);
-    if (ch === ca) continue;
-    const side = ch > ca ? s.home : s.away;
-    if (cover[side] === 1) sw++; else if (cover[side] === 0) sl++;
+  // ---- this week ----
+  const upcoming = {
+    NFL: (() => { const u = NG.filter((g) => !g.final && g.season === 2026 && g.home_spread != null); const wk = Math.min(...u.map((g) => g.week)); return u.filter((g) => g.week === wk); })(),
+    NCAAF: CG.filter((g) => g.live.state === 'pre' && g.home_spread != null && new Date(g.live.start_time).getTime() < now.getTime() + 7 * 86400e3),
+  };
+  const boards = {};
+  for (const lg of ['NFL', 'NCAAF']) {
+    boards[lg] = upcoming[lg].map((g) => {
+      const hits = [];
+      for (const s of systems.filter((x) => x.league === lg)) { const m = matchSystem(ctx[lg], s, s.parsed, g, caches[lg]); if (m) hits.push({ s, m, label: pickLabel(g, m) }); }
+      const byPick = new Map(); for (const h of hits) { const k = h.label; if (!byPick.has(k)) byPick.set(k, []); byPick.get(k).push(h); }
+      return { g, hits, picks: [...byPick.entries()].sort((a, b) => b[1].length - a[1].length) };
+    }).sort((a, b) => (a.g.date + a.g.time).localeCompare(b.g.date + b.g.time));
   }
 
-  const plays = res.angles.filter((a) => a.kind === 'play').length, fades = res.angles.length - plays;
-  const name = (a) => a.ids.map((id) => ATOMS[id][2]).join(' · ');
-  const rate = (a) => a.kind === 'play' ? a.w / a.d : 1 - a.w / a.d;
-  const angleLine = (a, team) => `<div style="padding:6px 0;border-top:1px solid var(--line);font-size:13.5px">
-    <div class="row" style="justify-content:space-between"><span>${a.kind === 'fade' ? `<span class="chip clay">Fade</span> ` : ''}${esc(name(a))}</span><b class="num">${pct(rate(a), 1)}</b></div>
-    <div class="dim" style="font-size:12px">${a.kind === 'fade' ? 'Opponents' : esc(team)} ${a.kind === 'play' ? a.w : a.d - a.w}–${a.kind === 'play' ? a.d - a.w : a.w} since 2002 · ${pct(a.kind === 'play' ? a.wA / a.dA : 1 - a.wA / a.dA, 0)} then ${pct(a.kind === 'play' ? a.wB / a.dB : 1 - a.wB / a.dB, 0)} · 2026 ${a.d26 ? (a.kind === 'play' ? `${a.w26}–${a.d26 - a.w26}` : `${a.d26 - a.w26}–${a.w26}`) : '—'}</div></div>`;
+  function sysRow(s) {
+    const r = s.record, sr = rate(s.since);
+    return `<tr class="click" data-sys="${esc(s.id)}"><td>${s.qualified ? '<span class="chip gold">Badged</span> ' : ''}${s.fade ? '<span class="chip clay">Fade</span> ' : ''}${s.priced ? '<span class="chip">ML</span> ' : ''}${esc(s.name)}</td>
+      <td class="r num">${rec(r)}<div class="dim" style="font-size:12px">${pct(s.rate, 1)}</div></td>
+      <td class="r num ${s.since.w + s.since.l ? (sr > BE ? 'mint' : 'clay') : 'dim'}">${rec(s.since)}${s.since.w + s.since.l ? `<div style="font-size:12px">${pct(sr, 0)}</div>` : ''}</td></tr>
+      ${st.open === s.id ? `<tr><td colspan="3" style="background:var(--surface2)"><div class="muted" style="font-size:13px;margin-bottom:6px">${esc(s.rule)}</div>
+        ${s.since.games.length ? `<div class="kicker" style="color:var(--muted);margin:6px 0">Since it was found</div>${s.since.games.slice(-12).reverse().map(({ g, m, gr }) => `<div style="font-size:12.5px">${esc(g.date)} · ${esc(g.away)} ${g.away_score} @ ${esc(g.home)} ${g.home_score} · ${esc(pickLabel(g, m))} <b class="${gr === 'win' ? 'mint' : gr === 'loss' ? 'clay' : ''}">${gr}</b></div>`).join('')}` : ''}
+        <div class="kicker" style="color:var(--muted);margin:8px 0 4px">Recent games in the record</div>${(s.history || []).slice(0, 8).map((x) => `<div style="font-size:12.5px">${esc(x.date)} · ${esc(x.matchup)} · ${esc(x.pick)} <b class="${x.result === 'win' ? 'mint' : x.result === 'loss' ? 'clay' : ''}">${x.result}</b>${x.score ? ` <span class="dim">(${esc(x.score)})</span>` : ''}</div>`).join('')}
+        ${s.rebuilt ? `<div class="dim" style="font-size:12px;margin-top:6px">Rebuilt here from nflverse: ${rec(s.rebuilt)} (Grok’s file: ${rec(s.record)}).</div>` : ''}</td></tr>` : ''}`;
+  }
 
   function draw() {
-    const clusters = cards.filter((c) => c.gap >= 2).sort((a, b) => b.gap - a.gap).slice(0, 6);
-    const lib = [...res.angles].sort((a, b) => rate(b) - rate(a));
+    const lg = st.lg;
+    const lib = systems.filter((s) => s.league === lg && (st.kind === 'all' || s.kind === st.kind) && (st.tier === 'all' || (st.tier === 'badged' ? s.qualified : !s.qualified)) && (!st.q || s.name.toLowerCase().includes(st.q.toLowerCase())))
+      .sort((a, b) => (b.qualified - a.qualified) || ((b.rate ?? 0) - (a.rate ?? 0)));
+    const sa = sinceAll[lg], sb = sinceBadged[lg];
+    const gb = file.grokBoards.filter((b) => b.league === lg);
+    const board = boards[lg];
+
     el.innerHTML = `
-    <div class="ph"><div><div class="kicker">NFL angles</div><h1>Matrix</h1><p>Situations that covered the spread at 57% or better in <i>both</i> halves of NFL history (2002–2013 and 2014–2025), matched to this week’s games.</p></div>
+    <div class="ph"><div><div class="kicker">${lg === 'NFL' ? 'NFL' : 'College'} systems</div><h1>Matrix</h1><p>Grok’s 464 situational systems, rebuilt rule for rule and matched to this week’s games, plus the test that matters: how they’ve done on games played after they were found.</p></div>
       <button class="btn" data-act="refresh">↻ Refresh</button></div>
-    ${howTo('Read this first', `<ol>
-      <li>An angle is two or three situations combined, like “Road · Underdog · Off a bye.” Every combination is graded against the closing spread.</li>
-      <li>Testing ${res.tested.toLocaleString()} combinations means some will look great by luck. Running the same test on coin-flip results passes about <b>${Math.round(luck)}</b>; the real data passes <b>${res.angles.length}</b>. That gap is the only part that might be real.</li>
-      <li>The honest score is this season: when more angles sided with one team, that team covered <b>${sw}–${sl}</b> in 2026. Treat angles as a tiebreaker, not a pick.</li></ol>`, 'mx')}
-    ${res.angles.length <= Math.max(luck * 2, luck + 6) ? `<div class="card" style="border-color:#e0795a88;margin-bottom:12px"><b class="clay">Verdict:</b> <span class="muted">the real data passes about as many angles as coin flips would (${res.angles.length} vs ~${Math.round(luck)}). There’s no evidence these situations beat the closing spread, so don’t bet them on their own.</span></div>` : ''}
-    <div class="grid g4">
-      <div class="card stat"><div class="k">Angles tested</div><div class="v num">${res.tested.toLocaleString()}</div><div class="s">2 and 3-way combinations</div></div>
-      <div class="card stat"><div class="k">Passed both halves</div><div class="v num">${res.angles.length}</div><div class="s">${plays} plays · ${fades} fades</div></div>
-      <div class="card stat"><div class="k">Luck would pass</div><div class="v num">~${Math.round(luck)}</div><div class="s">same test, coin-flip results</div></div>
-      <div class="card stat"><div class="k">2026 so far</div><div class="v num">${sw}–${sl}</div><div class="s">side with more angles, ATS</div></div>
-    </div>
-    <div class="row" style="margin-top:18px">${seg('tab', [['board', `Week ${Number.isFinite(nextWeek) ? nextWeek : ''} board`], ['lib', 'Library']], st.tab)}</div>
-    ${st.tab === 'board' ? `
-      ${clusters.length ? `<div class="sec"><h2>Where angles agree</h2><p class="sub">Games where one side has at least two more angles than the other.</p>
-        <div class="grid g3">${clusters.map((c) => { const t = c.g._live.data[c.lean]; const sp = c.lean === 'home' ? Number(c.g._live.spread_home) : -Number(c.g._live.spread_home);
-          return `<div class="card hl"><div class="row" style="justify-content:space-between"><span class="team">${logo(t)}<b>${esc(t.short)} ${line(sp)}</b></span><span class="chip gold">${Math.max(c.sh, c.sa)} to ${Math.min(c.sh, c.sa)}</span></div>
-          <div class="dim" style="font-size:12.5px;margin-top:4px">${esc(c.g._live.data.away.abbr)} @ ${esc(c.g._live.data.home.abbr)} · ${esc(fmtDay(c.g._live.start_time))} ${esc(fmtTime(c.g._live.start_time))}</div></div>`; }).join('')}</div></div>` : ''}
-      <div class="sec"><h2>Every game</h2><p class="sub">Spreads are DraftKings now. Each angle shows its full record, each half, and 2026.</p>
-      <div class="grid g2">${cards.map((c) => {
-        const lv = c.g._live, d = lv.data;
-        const col = (side) => { const s = c.sides[side], o = c.sides[side === 'home' ? 'away' : 'home']; const t = d[side];
-          const sp = side === 'home' ? Number(lv.spread_home) : -Number(lv.spread_home);
-          const list = [...(s?.plays || []).map((a) => angleLine(a, t.short)), ...(o?.fades || []).map((a) => angleLine(a, t.short))];
-          return `<div><div class="row" style="justify-content:space-between"><span class="team">${logo(t)}<b>${esc(t.short)} ${line(sp)}</b></span><span class="chip ${c.lean === side ? 'gold' : ''}">${side === 'home' ? c.sh : c.sa}</span></div>${list.slice(0, 4).join('') || '<div class="dim" style="font-size:12.5px;padding:6px 0">No angles</div>'}${list.length > 4 ? `<div class="dim" style="font-size:12px">+ ${list.length - 4} more</div>` : ''}</div>`; };
-        return `<div class="card"><div class="dim" style="font-size:12.5px;margin-bottom:8px">${esc(fmtDay(lv.start_time))} ${esc(fmtTime(lv.start_time))}${c.g.div_game ? ' · Division' : ''}${d.neutral ? ' · Neutral' : ''}</div>
-          <div class="grid" style="grid-template-columns:1fr 1fr;gap:14px">${col('away')}${col('home')}</div></div>`;
-      }).join('') || '<div class="empty">No games with lines yet this week.</div>'}</div></div>`
-    : `<div class="sec"><h2>Library</h2><p class="sub">Every angle that passed, best first. Rates are against the closing spread; pushes don’t count.</p>
-      <div class="card" style="padding:4px 12px;overflow-x:auto"><table class="t"><tr><th>Angle</th><th class="r">Record</th><th class="r">2002–13</th><th class="r">2014–25</th><th class="r">2026</th></tr>
-      ${lib.map((a) => { const r = rate(a); const w = a.kind === 'play' ? a.w : a.d - a.w; const w26 = a.kind === 'play' ? a.w26 : a.d26 - a.w26;
-        return `<tr><td>${a.kind === 'fade' ? '<span class="chip clay">Fade</span> ' : ''}${esc(name(a))}</td><td class="r num">${w}–${a.d - w}<div class="dim" style="font-size:12px">${pct(r, 1)}</div></td>
-        <td class="r num">${pct(a.kind === 'play' ? a.wA / a.dA : 1 - a.wA / a.dA, 1)}</td><td class="r num">${pct(a.kind === 'play' ? a.wB / a.dB : 1 - a.wB / a.dB, 1)}</td>
-        <td class="r num">${a.d26 ? `${w26}–${a.d26 - w26}` : '—'}</td></tr>`; }).join('')}</table></div></div>`}
-    ${footNote('History: nflverse closing spreads, regular season 2002–2026. Current spreads: DraftKings via ESPN. Reference only, not a recommendation.')}`;
-    onSeg(el, 'tab', (v) => { st.tab = v; store.set('mx:tab', v); draw(); });
+    <div class="card" style="border-color:#e0795a88;margin-bottom:14px"><b class="clay">Read this before betting a system.</b>
+      <p class="muted" style="margin:6px 0 0">These were found by grading ${lg === 'NFL' ? '259,428 NFL' : '36,602 college'} combinations of situations and keeping the ones with the best past records. Search that many and hundreds will look great by luck alone. The only fair test is games played after a system was found. So far:</p>
+      <div class="grid g4" style="margin-top:10px">
+        <div class="stat"><div class="k">All plays since found</div><div class="v num ${rate(sa) !== null ? (rate(sa) > BE ? 'mint' : 'clay') : ''}">${rec(sa)}</div><div class="s">${pct(rate(sa), 1)} · ${lg === 'NFL' ? `week${nflWeeks.length > 1 ? 's' : ''} ${nflWeeks.join(', ') || '—'}` : `weeks ${cfbWeeks[0] ?? ''}–${cfbWeeks[cfbWeeks.length - 1] ?? ''}`}</div></div>
+        <div class="stat"><div class="k">Badged plays since</div><div class="v num ${rate(sb) !== null ? (rate(sb) > BE ? 'mint' : 'clay') : ''}">${rec(sb)}</div><div class="s">${pct(rate(sb), 1)} · the 60%+ tier</div></div>
+        ${gb.map((b) => `<div class="stat"><div class="k">Grok’s ${esc(b.label)} board</div><div class="v num">${rec(b.all)}</div><div class="s">badged ${rec(b.badged)} · ${b.note.includes('inside the record') ? 'inside its own record' : 'after the record'}</div></div>`).join('')}
+      </div>
+      <p class="dim" style="font-size:12.5px;margin:8px 0 0">Break-even at −110 is ${pct(BE, 1)}. ${lg === 'NFL' ? `Rebuild check: ${exact} of ${checked} NFL systems reproduce Grok’s record exactly, ${close} more within a few games.` : 'College plays since found are graded at ESPN’s DraftKings closing line.'}</p></div>
+    <div class="row" style="margin-bottom:12px">${seg('lg', [['NFL', 'NFL'], ['NCAAF', 'College']], lg)} ${seg('tab', [['week', 'This week'], ['lib', 'Library']], st.tab)}</div>
+    ${st.tab === 'week' ? `<div class="grid g2">${board.map(({ g, hits, picks }) => {
+        const lv = g.live, d = lv?.data;
+        return `<div class="card ${picks[0] && picks[0][1].some((h) => h.s.qualified) ? 'hl' : ''}">
+          <div class="row" style="justify-content:space-between;font-size:13px"><span>${lv ? `${esc(fmtDay(lv.start_time))} · ${esc(fmtTime(lv.start_time))}` : esc(g.date)}</span><span class="dim">${hits.length} system${hits.length === 1 ? '' : 's'}</span></div>
+          <div class="team" style="margin-top:8px">${d ? logo(d.away) : ''}<b>${esc(d?.away?.short ?? g.away)}</b></div><div class="team" style="margin-top:4px">${d ? logo(d.home) : ''}<b>${d?.neutral || g.neutral ? 'vs' : '@'} ${esc(d?.home?.short ?? g.home)}</b> <span class="dim">${g.home} ${g.home_spread > 0 ? '+' : ''}${g.home_spread} · O/U ${g.total ?? '—'}</span></div>
+          ${picks.map(([label, hs]) => `<div style="margin-top:10px"><div class="row" style="justify-content:space-between"><b>${esc(label)}</b><span class="chip ${hs.some((h) => h.s.qualified) ? 'gold' : ''}">${hs.length}</span></div>
+            ${hs.slice(0, 4).map((h) => `<div class="dim" style="font-size:12.5px;padding:3px 0;border-top:1px solid var(--line)">${h.s.qualified ? '<b class="gold">Badged</b> · ' : ''}${esc(h.s.name)} · ${rec(h.s.record)} · since: <span class="${h.s.since.w + h.s.since.l ? (rate(h.s.since) > BE ? 'mint' : 'clay') : ''}">${rec(h.s.since)}</span></div>`).join('')}
+            ${hs.length > 4 ? `<div class="dim" style="font-size:12px">+ ${hs.length - 4} more</div>` : ''}</div>`).join('') || '<div class="dim" style="font-size:12.5px;margin-top:8px">No systems fit this game.</div>'}
+        </div>`; }).join('') || '<div class="empty">No games with lines yet.</div>'}</div>`
+    : `<div class="row" style="margin-bottom:10px">${seg('kind', [['all', 'All'], ['spread', 'Spread'], ['total', 'Total'], ['moneyline', 'Moneyline']], st.kind)} ${seg('tier', [['all', 'All tiers'], ['badged', 'Badged'], ['library', 'Library']], st.tier)}
+        <input data-act="q" placeholder="Search systems" value="${esc(st.q)}" style="min-width:200px"></div>
+      <div class="card" style="padding:4px 12px;overflow-x:auto"><table class="t"><tr><th>${lib.length} systems · tap one for details</th><th class="r">Record</th><th class="r">Since found</th></tr>${lib.map(sysRow).join('')}</table></div>`}
+    ${footNote(`Systems and records: Grok workspace, as of ${esc(file.asOf)}. NFL history: nflverse closing lines. College since-found games: ESPN with DraftKings closing lines. Reference only, not a recommendation.`)}`;
+
+    onSeg(el, 'lg', (v) => { st.lg = v; store.set('mx2:lg', v); st.open = null; draw(); });
+    onSeg(el, 'tab', (v) => { st.tab = v; store.set('mx2:tab', v); draw(); });
+    onSeg(el, 'kind', (v) => { st.kind = v; draw(); });
+    onSeg(el, 'tier', (v) => { st.tier = v; draw(); });
+    const q = el.querySelector('[data-act=q]'); if (q) q.oninput = () => { st.q = q.value; const pos = q.selectionStart; draw(); const n = el.querySelector('[data-act=q]'); n.focus(); n.setSelectionRange(pos, pos); };
+    el.querySelectorAll('[data-sys]').forEach((tr) => tr.onclick = () => { st.open = st.open === tr.dataset.sys ? null : tr.dataset.sys; draw(); });
     el.querySelector('[data-act=refresh]').onclick = () => { clearCache(); render(el); };
     wireHow(el);
   }
