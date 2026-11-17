@@ -1,4 +1,4 @@
-import { games, api, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn } from './core.js?v=202611171320';
+import { games, api, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn } from './core.js?v=202611171321';
 
 // Edges a projection needs over the DraftKings number before it counts as a lock.
 const EDGE = { pre: 5, q1: 6, half: 6, q3: 5 };

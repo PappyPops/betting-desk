@@ -2,7 +2,7 @@
 // the number to get, and the number where it's no longer worth chasing. Every flag is frozen when it first fires
 // (from the saved line history) and graded two ways: did the line keep moving past it by kickoff, and did it win.
 // Rules written Nov 17, 2026, before any of these flags had been graded.
-import { api } from './core.js?v=202611171320';
+import { api } from './core.js?v=202611171321';
 
 export const TRIG = { nfl: { tot: 1.5, sp: 1 }, cfb: { tot: 1.5, sp: 1.5 }, nba: { tot: 2, sp: 1.5 } };
 export const STEP = { nfl: { tot: 1, sp: 1 }, cfb: { tot: 1.5, sp: 1.5 }, nba: { tot: 1.5, sp: 1 } };
