@@ -1,9 +1,9 @@
 // Best bets: every tool's current reads on the same games, weighted by how each tool has actually done on games
 // it hadn't seen yet. A source with no record, or a record under break-even, gets no weight.
-import { api, games } from './core.js?v=202611162303';
-import { matrixData } from './matrix.js?v=202611162303';
-import { RESEARCH, BREAK_EVEN } from './research.js?v=202611162303';
-import { CUTS, grade as cutGrade } from './linelife.js?v=202611162303';
+import { api, games } from './core.js?v=202611171318';
+import { matrixData } from './matrix.js?v=202611171318';
+import { RESEARCH, BREAK_EVEN } from './research.js?v=202611171318';
+import { CUTS, grade as cutGrade } from './linelife.js?v=202611171318';
 
 const BE = 110 / 210;
 const K = 150; // shrink each record toward break-even as if it had 150 more games at exactly break-even
@@ -93,6 +93,15 @@ export async function bestBets() {
     const src = { id: 'capn', name: 'Cap’n Cash: 3+ handicappers agree', short: 'Cap’n Cash', w, l, edge: edgeOf(w, l), note: `settled stacks ${w}–${l}` };
     sources.push(src);
     for (const s of stacks(full.filter((k) => k.status !== 'settled'))) if (s.mk !== 'ml') add({ ...src, count: s.picks.length }, s.gid, s.mk, s.side);
+  }
+
+  // 6. Line Life move flags, judged on every frozen flag since line history started
+  {
+    const recent = (await Promise.all(['nfl', 'cfb', 'nba'].map((lg) => games({ league: lg, from: '2026-11-16', ttl: 300_000 })))).flat();
+    const r = gradeFlags(await loadFlags(recent)).all ?? { w: 0, l: 0 };
+    const src = { id: 'moves', name: 'Line Life: line moved toward this side', short: 'Line Life', w: r.w, l: r.l, edge: edgeOf(r.w, r.l), note: `flags so far ${r.w}–${r.l}` };
+    sources.push(src);
+    for (const g of G.values()) if (pre(g.id)) for (const f of flagNow(g)) add(src, g.id, f.mk, f.side);
   }
 
   // combine: the strongest source counts in full, each extra agreeing source a quarter, opposing sources subtract

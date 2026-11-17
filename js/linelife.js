@@ -1,5 +1,6 @@
-import { games, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611162303';
-import { nflHist } from './hist.js?v=202611162303';
+import { games, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611171318';
+import { flagNow, loadFlags, gradeFlags, TRIG } from './moves.js?v=202611171318';
+import { nflHist } from './hist.js?v=202611171318';
 
 // Totals rules written up front (not mined from the data), then checked on two separate halves of history.
 export const CUTS = [
@@ -26,7 +27,7 @@ const recTxt = (r) => r.w + r.l ? `${r.w}–${r.l}${r.p ? '–' + r.p : ''}` : '
 
 export async function render(el) {
   const st = { lg: store.get('ll:lg', 'nfl'), view: 'board' };
-  let rows = [], hist = null;
+  let rows = [], hist = null, flagRec = null;
 
   async function load() {
     el.innerHTML = '<div class="loading">Pulling the book…</div>';
@@ -34,6 +35,11 @@ export async function render(el) {
     rows = await games({ league: st.lg, from: seasonStart, ttl: 90_000 });
     if (st.lg === 'nfl' && !hist) hist = await nflHist();
     draw();
+    // grade the move signal across all three leagues (doesn't hold up the page)
+    if (!flagRec) {
+      const recent = (await Promise.all(['nfl', 'cfb', 'nba'].map((lg) => games({ league: lg, from: '2026-11-16', ttl: 300_000 })))).flat();
+      flagRec = gradeFlags(await loadFlags(recent)); draw();
+    }
   }
 
   function draw() {
@@ -93,10 +99,31 @@ export async function render(el) {
         <td>${cuts.map((c) => `<span class="chip ${c.side === 'under' ? 'clay' : 'gold'}" title="${esc(c.why)}">${c.side === 'under' ? 'Under' : 'Over'} · ${esc(c.name)}</span>`).join(' ')}</td></tr>`;
     }).join('');
 
+    const LGN = { nfl: 'NFL', cfb: 'College', nba: 'NBA' };
+    const team = (g, side) => g.data?.[side]?.short ?? (side === 'home' ? g.home : g.away);
+    const pick = (g, f, n) => f.mk === 'tot' ? `${f.side === 'over' ? 'Over' : 'Under'} ${n}` : `${team(g, f.side)} ${line(n)}`;
+    const movers = rows.filter((g) => g.state === 'pre' && new Date(g.start_time).getTime() > now + 3600e3 && new Date(g.start_time).getTime() < now + 8 * 86400e3)
+      .flatMap((g) => flagNow(g).map((f) => ({ g, f }))).sort((a, b) => b.f.move - a.f.move);
+    const fr = (k) => flagRec?.[k];
+    const recCell = (b) => b && b.n ? `${b.w}–${b.l}${b.p ? '–' + b.p : ''}<div class="dim" style="font-size:12px">${pct(b.w + b.l ? b.w / (b.w + b.l) : null, 1)}</div>` : '—';
+    const clvCell = (b) => b && b.n ? `${b.beat} of ${b.n}<div class="dim" style="font-size:12px">${b.same} same · ${b.back} came back</div>` : '—';
+    const movesHtml = `
+    <div class="sec"><h2>Moving lines</h2><p class="sub">The opener is where books make mistakes, and the move shows which side they were wrong on. When a line has moved ${TRIG[st.lg].tot}+ on a total or ${TRIG[st.lg].sp}+ on a spread, the side it moved toward is flagged with the number to get and the point where it’s no longer worth chasing.</p>
+      ${movers.length ? `<div class="grid g3">${movers.map(({ g, f }) => `<div class="card">
+        <div class="row" style="justify-content:space-between;font-size:12.5px"><span>${esc(fmtDay(g.start_time))} · ${esc(fmtTime(g.start_time))}</span><span class="chip">${f.mk === 'tot' ? 'Total' : 'Spread'}</span></div>
+        <div class="dim" style="font-size:13px;margin-top:6px">${esc(team(g, 'away'))} @ ${esc(team(g, 'home'))}</div>
+        <div class="disp" style="font-size:22px;margin:2px 0">${esc(pick(g, f, f.num))}</div>
+        <div style="font-size:13px">Opened ${esc(pick(g, f, f.open))} · moved ${f.move} toward this side</div>
+        <div style="font-size:13px;margin-top:6px;padding-top:6px;border-top:1px solid var(--line2)"><b class="mint">Get it at ${esc(pick(g, f, f.num))} or better.</b> <span class="clay">Pass past ${esc(pick(g, f, f.limit))}.</span></div></div>`).join('')}</div>` : '<div class="empty">No line has moved enough yet.</div>'}
+      <div class="card" style="padding:4px 12px;overflow-x:auto;margin-top:12px"><table class="t"><tr><th>Does the flag work?</th><th class="r">Line kept moving past the flag</th><th class="r">Record at the flagged number</th></tr>
+        ${[['all', 'All leagues'], ...['nfl', 'cfb', 'nba'].flatMap((lg) => [[`${lg}:tot`, `${LGN[lg]} totals`], [`${lg}:sp`, `${LGN[lg]} spreads`]])].map(([k, lab]) => `<tr><td>${lab}</td><td class="r num">${flagRec ? clvCell(fr(k)) : '…'}</td><td class="r num">${flagRec ? recCell(fr(k)) : '…'}</td></tr>`).join('')}</table></div>
+      <p class="stamp">Each flag is frozen the first time it fires (every line change has been saved since Nov 16, 2026) and graded at that number. “Kept moving” means the closing line ended up worse than the flagged number, so taking the flag beat the close. Break-even is 52.4% at −110. These rules were written before any flag was graded.</p></div>`;
+
     el.innerHTML = `
-    <div class="ph"><div><div class="kicker">Totals tracker</div><h1>Line Life</h1><p>Open, close, and what actually scored. The opener posts when the book hangs it, the number becomes the close at kickoff, and the final is measured against both.</p></div>
+    <div class="ph"><div><div class="kicker">Line tracker</div><h1>Line Life</h1><p>Open, close, and what actually scored. The opener posts when the book hangs it, the number becomes the close at kickoff, and the final is measured against both.</p></div>
       <button class="btn" data-act="refresh">↻ Refresh</button></div>
     ${howTo('How to read it', `<ol>
+      <li><b>Moving lines</b> flags any total or spread that has moved far enough from the opener, with the number to get and where to stop chasing it. The table under it grades every flag.</li>
       <li><b>Season</b> shows how finals landed against the closing total and the opener. A market that’s right should split about 50/50.</li>
       <li><b>Board</b> lists every upcoming total with its open, the number now, and the move. Big moves are highlighted. A gold edge means a cut that holds applies to that game.</li>
       <li><b>Cuts</b> (NFL) are simple rules checked on two separate halves of history. The old version mined patterns on past seasons and went 16–22 this year; these have to survive both halves before they light up.</li></ol>`, 'll')}
@@ -107,6 +134,7 @@ export async function render(el) {
       <div class="card stat"><div class="k">Vs the open</div><div class="v num">${vOpen.o}–${vOpen.u}${vOpen.p ? '–' + vOpen.p : ''}</div><div class="s">over–under${vOpen.p ? '–push' : ''}</div></div>
       <div class="card stat"><div class="k">Avg miss</div><div class="v num">${avgMiss === null ? '—' : sgn(avgMiss)}</div><div class="s">final minus close, points</div></div>
     </div>
+    ${movesHtml}
     <div class="sec"><h2>On the board</h2><p class="sub">${upcoming.length} totals posted in the next 8 days. Moves are measured from DraftKings’ opener.</p>
       <div class="card" style="padding:4px 12px;overflow-x:auto"><table class="t">
       <tr><th>Game</th><th>When</th><th class="r">Open</th><th class="r">Now</th><th class="r">Move</th><th>Cuts</th></tr>
