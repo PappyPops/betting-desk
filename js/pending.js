@@ -1,4 +1,4 @@
-import { esc, footNote } from './core.js?v=202611162200';
+import { esc, footNote } from './core.js?v=202611162202';
 
 const INFO = {
   juice: {

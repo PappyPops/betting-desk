@@ -1,6 +1,6 @@
-import { games as loadGames, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, logo } from './core.js?v=202611162200';
-import { nflHist } from './hist.js?v=202611162200';
-import { makeContext, parseSystem, matchSystem, gradePick, pickLabel } from './systems.js?v=202611162200';
+import { games as loadGames, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, logo } from './core.js?v=202611162202';
+import { nflHist } from './hist.js?v=202611162202';
+import { makeContext, parseSystem, matchSystem, gradePick, pickLabel } from './systems.js?v=202611162202';
 
 const NFL_IN_RECORD = (g) => g.season < 2026 || (g.season === 2026 && g.week <= 9); // Grok's NFL records run through 2026 week 9
 const CFB_FROM_WEEK = 5; // Grok's college records run through 2026 week 4
@@ -90,7 +90,7 @@ export async function render(el) {
 
   // ---- this week ----
   const upcoming = {
-    NFL: (() => { const u = NG.filter((g) => !g.final && g.season === 2026 && g.home_spread != null); const wk = Math.min(...u.map((g) => g.week)); return u.filter((g) => g.week === wk); })(),
+    NFL: (() => { const u = NG.filter((g) => !g.final && g.season === 2026 && g.home_spread != null && (!g.live || g.live.state === 'pre') && g.date >= new Date(now.getTime() - 86400e3).toISOString().slice(0, 10)); const wk = Math.min(...u.map((g) => g.week)); return u.filter((g) => g.week === wk); })(),
     NCAAF: CG.filter((g) => g.live.state === 'pre' && g.home_spread != null && new Date(g.live.start_time).getTime() < now.getTime() + 7 * 86400e3),
   };
   const boards = {};
@@ -132,7 +132,7 @@ export async function render(el) {
         <div class="stat"><div class="k">Badged plays since</div><div class="v num ${rate(sb) !== null ? (rate(sb) > BE ? 'mint' : 'clay') : ''}">${rec(sb)}</div><div class="s">${pct(rate(sb), 1)} · the 60%+ tier</div></div>
         ${gb.map((b) => `<div class="stat"><div class="k">Grok’s ${esc(b.label)} board</div><div class="v num">${rec(b.all)}</div><div class="s">badged ${rec(b.badged)} · ${b.note.includes('inside the record') ? 'inside its own record' : 'after the record'}</div></div>`).join('')}
       </div>
-      <p class="dim" style="font-size:12.5px;margin:8px 0 0">Break-even at −110 is ${pct(BE, 1)}. ${lg === 'NFL' ? `Rebuild check: ${exact} of ${checked} NFL systems reproduce Grok’s record exactly, ${close} more within a few games.` : 'College plays since found are graded at ESPN’s DraftKings closing line.'}</p></div>
+      <p class="dim" style="font-size:12.5px;margin:8px 0 0">Break-even at −110 is ${pct(BE, 1)}. ${lg === 'NFL' ? `Rebuild check: ${exact} of ${checked} NFL systems reproduce Grok’s record exactly, ${close} more within a few games.` : `College plays since found are graded at ESPN’s DraftKings closing line, on the ${after.NCAAF.length} games so far with a closing number (more are filled in each night). Previous-game situations only see games against FBS teams.`}</p></div>
     <div class="row" style="margin-bottom:12px">${seg('lg', [['NFL', 'NFL'], ['NCAAF', 'College']], lg)} ${seg('tab', [['week', 'This week'], ['lib', 'Library']], st.tab)}</div>
     ${st.tab === 'week' ? `<div class="grid g2">${board.map(({ g, hits, picks }) => {
         const lv = g.live, d = lv?.data;
