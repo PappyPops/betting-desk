@@ -24,7 +24,10 @@ export async function games({ league, from, to, extra = '' , ttl = 60_000}) {
   let q = `games?select=${GAME_COLS}&league=eq.${league}&order=start_time.asc`;
   if (from) q += `&start_time=gte.${encodeURIComponent(from)}`;
   if (to) q += `&start_time=lt.${encodeURIComponent(to)}`;
-  return api(q + extra, { ttl });
+  // the database returns at most 1,000 rows per request, so page through
+  const out = [];
+  for (let off = 0; off < 20000; off += 1000) { const part = await api(`${q}${extra}&offset=${off}&limit=1000`, { ttl }); out.push(...part); if (part.length < 1000) break; }
+  return out;
 }
 export async function lastSync() {
   const b = await blob('sync:live', 30_000);
