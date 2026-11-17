@@ -1,8 +1,8 @@
-import { games, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611162226';
-import { nflHist } from './hist.js?v=202611162226';
+import { games, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611162301';
+import { nflHist } from './hist.js?v=202611162301';
 
 // Totals rules written up front (not mined from the data), then checked on two separate halves of history.
-const CUTS = [
+export const CUTS = [
   { id: 'wind', side: 'under', name: 'Wind 15+ mph', why: 'Wind shortens the passing game and kicking range.', test: (g) => g.wind !== null && g.wind >= 15 && g.roof !== 'dome' && g.roof !== 'closed' },
   { id: 'cold', side: 'under', name: 'Freezing, outdoors', why: 'Kickoff temperature at or below 32°F.', test: (g) => g.temp !== null && g.temp <= 32 && g.roof === 'outdoors' },
   { id: 'hi', side: 'under', name: 'Total 50 or higher', why: 'The market tends to shade big totals up for over bettors.', test: (g) => g.total_line >= 50 },
@@ -13,7 +13,7 @@ const CUTS = [
   { id: 'thu', side: 'under', name: 'Thursday game', why: 'Short week, simpler game plans.', test: (g) => g.weekday === 'Thursday' },
 ];
 
-function grade(list, side) {
+export function grade(list, side) {
   let w = 0, l = 0, p = 0;
   for (const g of list) {
     if (g.pts === null || g.total_line === null) continue;

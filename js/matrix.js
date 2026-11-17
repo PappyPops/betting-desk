@@ -1,7 +1,7 @@
-import { games as loadGames, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, logo } from './core.js?v=202611162226';
-import { nflHist } from './hist.js?v=202611162226';
-import { makeContext, parseSystem, matchSystem, gradePick, pickLabel } from './systems.js?v=202611162226';
-import { RESEARCH, gradeResearch, researchLabel, BREAK_EVEN, nbaGames } from './research.js?v=202611162226';
+import { games as loadGames, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, logo } from './core.js?v=202611162301';
+import { nflHist } from './hist.js?v=202611162301';
+import { makeContext, parseSystem, matchSystem, gradePick, pickLabel } from './systems.js?v=202611162301';
+import { RESEARCH, gradeResearch, researchLabel, BREAK_EVEN, nbaGames } from './research.js?v=202611162301';
 
 const NFL_IN_RECORD = (g) => g.season < 2026 || (g.season === 2026 && g.week <= 9); // Grok's NFL records run through 2026 week 9
 const CFB_FROM_WEEK = 5; // Grok's college records run through 2026 week 4
@@ -44,9 +44,13 @@ function cfbGames(rows) {
   });
 }
 
-export async function render(el) {
-  const st = { tab: store.get('mx2:tab', 'week'), lg: store.get('mx2:lg', 'NFL'), kind: 'all', tier: 'all', q: '', open: null };
-  el.innerHTML = '<div class="loading">Loading 464 systems and rebuilding every rule…</div>';
+let mxMemo = null, mxAt = 0;
+// Everything the Matrix computes, shared with the Today page's best bets. Cached for five minutes.
+export function matrixData() {
+  if (!mxMemo || Date.now() - mxAt > 300_000) { mxAt = Date.now(); mxMemo = buildMatrix().catch((e) => { mxMemo = null; throw e; }); }
+  return mxMemo;
+}
+async function buildMatrix() {
   const now = new Date();
   const [file, hist, nflLive, cfbRows, nbaRows] = await Promise.all([
     systemsFile(), nflHist(),
@@ -122,6 +126,14 @@ export async function render(el) {
       return { g, hits, rhits, picks: [...byPick.entries()].sort((a, b) => b[1].length - a[1].length) };
     }).sort((a, b) => (a.g.date + a.g.time).localeCompare(b.g.date + b.g.time));
   }
+
+  return { now, file, hist, NG, CG, NB, ctx, systems, caches, exact, close, checked, sinceAll, sinceBadged, cfbWeeks, nflWeeks, researchUpcoming, upcoming, boards };
+}
+
+export async function render(el) {
+  const st = { tab: store.get('mx2:tab', 'week'), lg: store.get('mx2:lg', 'NFL'), kind: 'all', tier: 'all', q: '', open: null };
+  el.innerHTML = '<div class="loading">Loading 464 systems and rebuilding every rule…</div>';
+  const { now, file, hist, NG, CG, NB, ctx, systems, caches, exact, close, checked, sinceAll, sinceBadged, cfbWeeks, nflWeeks, researchUpcoming, upcoming, boards } = await matrixData();
 
   function sysRow(s) {
     const r = s.record, sr = rate(s.since);
