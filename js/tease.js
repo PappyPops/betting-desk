@@ -1,6 +1,8 @@
 import { games, esc, logo, seg, onSeg, store, line, odds, pct, decOdds, fmtTime, fmtDay, howTo, wireHow, footNote, copy, ncdf, clearCache, sgn } from './core.js';
 import { nflHist, teamRows } from './hist.js';
 
+// The model is an estimate, so a slip needs a real cushion (3%+) before it's called a play.
+const EDGE = 0.03;
 const DEF_PRICES = { 6: [-120, 160], 6.5: [-130, 150], 7: [-140, 130], 10: [-260, -120] };
 
 let rowsMemo = null;
@@ -92,9 +94,9 @@ export async function render(el) {
   }
 
   function slipCard(s, title) {
-    const good = s.ev > 0;
+    const good = s.ev >= EDGE, thin = s.ev > 0 && !good;
     return `<div class="card ${good ? 'hl' : ''}">
-      <div class="row" style="justify-content:space-between"><b>${esc(title)}</b><span class="chip ${good ? 'gold' : ''}">${good ? 'Plays' : 'Pass'} · ${sgn(s.ev * 100, 1)}%</span></div>
+      <div class="row" style="justify-content:space-between"><b>${esc(title)}</b><span class="chip ${good ? 'gold' : ''}">${good ? 'Plays' : thin ? 'Thin' : 'Pass'} · ${sgn(s.ev * 100, 1)}%</span></div>
       <div class="muted" style="font-size:13px;margin:4px 0 8px">${s.ls.length} legs at ${st.pts} pts, ${odds(s.pr)} · all legs hit ${pct(s.p, 1)} · break-even ${pct(1 / decOdds(s.pr), 1)}</div>
       ${s.ls.map((l) => `<div class="row" style="justify-content:space-between;padding:4px 0;border-top:1px solid var(--line)"><span class="team">${logo(l.team)}<span>${esc(l.team.short)} ${line(l.s)} → <b>${line(l.t)}</b></span></span><span class="num">${pct(legP(l), 1)}</span></div>`).join('')}
       <div style="margin-top:8px"><button class="btn" data-copy="${esc(s.ls.map((l) => `${l.team.abbr} ${line(l.t)}`).join(', ') + ` (${st.pts}-pt teaser, ${odds(s.pr)})`)}">Copy slip</button></div></div>`;
@@ -105,7 +107,7 @@ export async function render(el) {
     const shown = legs.filter((l) => st.filter === 'all' || (st.filter === 'both' ? l.key === 'both' : l.key))
       .sort((a, b) => new Date(a.g.start_time) - new Date(b.g.start_time) || a.gid.localeCompare(b.gid));
     const best = bestSlips();
-    const plays = best.filter((s) => s.ev > 0).slice(0, 4);
+    const plays = best.filter((s) => s.ev >= EDGE).slice(0, 4);
     const near = best.slice(0, 2);
     const mine = st.slip.map((id) => legs.find((l) => l.id === id)).filter(Boolean);
 
@@ -129,7 +131,7 @@ export async function render(el) {
     <p class="stamp">${esc(weekLabel)} · ${legs.length / 2} games · DraftKings spreads via ESPN · leg break-even ${pct(be2, 1)} (2 legs), ${pct(be3, 1)} (3 legs)</p>
 
     <div class="sec"><h2>${plays.length ? 'Slips that clear the price' : 'Nothing clears this price'}</h2>
-      <p class="sub">${plays.length ? 'Best combinations on the board right now.' : 'Closest slips below. Try a friendlier price or another point count.'}</p>
+      <p class="sub">${plays.length ? 'Best combinations on the board right now.' : 'Closest slips below. A slip needs about 3% of cushion to count, since the model is an estimate. Try a friendlier price or another point count.'}</p>
       <div class="grid g2">${(plays.length ? plays : near).map((s, i) => slipCard(s, plays.length ? `Slip ${i + 1}` : `Closest ${i + 1}`)).join('') || '<div class="empty">No lines posted yet.</div>'}</div></div>
 
     <div class="sec"><h2>Your slip</h2><p class="sub">Tap sides on the board to build your own.</p>

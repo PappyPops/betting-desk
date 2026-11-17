@@ -141,6 +141,7 @@ export async function render(el) {
       <li>An angle is two or three situations combined, like “Road · Underdog · Off a bye.” Every combination is graded against the closing spread.</li>
       <li>Testing ${res.tested.toLocaleString()} combinations means some will look great by luck. Running the same test on coin-flip results passes about <b>${Math.round(luck)}</b>; the real data passes <b>${res.angles.length}</b>. That gap is the only part that might be real.</li>
       <li>The honest score is this season: when more angles sided with one team, that team covered <b>${sw}–${sl}</b> in 2026. Treat angles as a tiebreaker, not a pick.</li></ol>`, 'mx')}
+    ${res.angles.length <= luck * 1.5 ? `<div class="card" style="border-color:#e0795a88;margin-bottom:12px"><b class="clay">Verdict:</b> <span class="muted">the real data passes about as many angles as coin flips would (${res.angles.length} vs ~${Math.round(luck)}). There’s no evidence these situations beat the closing spread, so don’t bet them on their own.</span></div>` : ''}
     <div class="grid g4">
       <div class="card stat"><div class="k">Angles tested</div><div class="v num">${res.tested.toLocaleString()}</div><div class="s">2 and 3-way combinations</div></div>
       <div class="card stat"><div class="k">Passed both halves</div><div class="v num">${res.angles.length}</div><div class="s">${plays} plays · ${fades} fades</div></div>

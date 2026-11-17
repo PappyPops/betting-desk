@@ -101,3 +101,4 @@ table.t tr.click:hover td{background:var(--surface)}
 .pill-live::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--clay);margin-right:5px;vertical-align:1px;animation:pulse 1.4s infinite}
 @keyframes pulse{50%{opacity:.3}}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--line2);padding:9px 16px;border-radius:999px;font-size:13.5px;z-index:99}
+table.t td.num,table.t td.r{white-space:nowrap}
