@@ -8,3 +8,5 @@ select cron.schedule('backfill-closes', '57 9 * * *', $$select public.call_fn('s
 select cron.schedule('cleanup-http', '7 * * * *', $$delete from net._http_response where created < now() - interval '6 hours'$$);
 select cron.schedule('action-splits', '*/10 * * * *', $$select public.call_fn('action?mode=splits', 90000)$$);
 select cron.schedule('action-experts', '3,33 * * * *', $$select public.call_fn('action?mode=experts', 90000)$$);
+select cron.schedule('picks-other', '13 */2 * * *', $$select public.call_fn('picks', 150000)$$);
+select cron.schedule('players-nfl', '52 10 * * *', $$select public.call_fn('players', 120000)$$);

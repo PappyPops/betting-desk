@@ -1,16 +1,16 @@
-import { lastSync, ago, esc } from './core.js?v=202611162123';
+import { lastSync, ago, esc } from './core.js?v=202611162136';
 
 const TOOLS = [
-  { id: 'desk', name: 'Today', grp: 'Desk', load: () => import('./desk.js?v=202611162123') },
-  { id: 'juice', name: 'The Juice', grp: 'Market', load: () => import('./juice.js?v=202611162123') },
-  { id: 'linelife', name: 'Line Life', grp: 'Market', load: () => import('./linelife.js?v=202611162123') },
-  { id: 'matrix', name: 'Matrix', grp: 'Models', load: () => import('./matrix.js?v=202611162123') },
-  { id: 'tease', name: 'Tease Me', grp: 'Models', load: () => import('./tease.js?v=202611162123') },
-  { id: 'paint', name: 'In the Paint', grp: 'Models', tag: 'soon', load: () => import('./pending.js?v=202611162123') },
-  { id: 'redzone', name: 'Redzone', grp: 'Models', tag: 'soon', load: () => import('./pending.js?v=202611162123') },
-  { id: 'slant', name: 'Slant', grp: 'Models', tag: 'soon', load: () => import('./pending.js?v=202611162123') },
-  { id: 'capn', name: "Cap'n Cash", grp: 'Crowd', load: () => import('./capn.js?v=202611162123') },
-  { id: 'eye', name: 'Eye in the Sky', grp: 'Watch', load: () => import('./eye.js?v=202611162123') },
+  { id: 'desk', name: 'Today', grp: 'Desk', load: () => import('./desk.js?v=202611162136') },
+  { id: 'juice', name: 'The Juice', grp: 'Market', load: () => import('./juice.js?v=202611162136') },
+  { id: 'linelife', name: 'Line Life', grp: 'Market', load: () => import('./linelife.js?v=202611162136') },
+  { id: 'matrix', name: 'Matrix', grp: 'Models', load: () => import('./matrix.js?v=202611162136') },
+  { id: 'tease', name: 'Tease Me', grp: 'Models', load: () => import('./tease.js?v=202611162136') },
+  { id: 'paint', name: 'In the Paint', grp: 'Models', load: () => import('./paint.js?v=202611162136') },
+  { id: 'redzone', name: 'Redzone', grp: 'Models', load: () => import('./redzone.js?v=202611162136') },
+  { id: 'slant', name: 'Slant', grp: 'Models', tag: 'soon', load: () => import('./pending.js?v=202611162136') },
+  { id: 'capn', name: "Cap'n Cash", grp: 'Crowd', load: () => import('./capn.js?v=202611162136') },
+  { id: 'eye', name: 'Eye in the Sky', grp: 'Watch', load: () => import('./eye.js?v=202611162136') },
 ];
 export const toolById = Object.fromEntries(TOOLS.map((t) => [t.id, t]));
 

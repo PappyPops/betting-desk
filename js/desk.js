@@ -1,4 +1,4 @@
-import { games, esc, logo, line, sgn, fmtTime, fmtDay, footNote, lastSync, ago, clearCache } from './core.js?v=202611162123';
+import { games, esc, logo, line, sgn, fmtTime, fmtDay, footNote, lastSync, ago, clearCache } from './core.js?v=202611162136';
 
 const LG = { nfl: 'NFL', cfb: 'College', nba: 'NBA' };
 
@@ -23,6 +23,8 @@ export async function render(el, { toolById }) {
   const tools = [
     ['juice', 'Where the tickets are versus where the money is, with every read graded.'],
     ['capn', 'Public handicapper picks stacked by side, with each one’s record.'],
+    ['paint', 'NBA totals projected before tip and at every quarter break, with the season graded.'],
+    ['redzone', 'Anytime touchdown chances, checked against what actually happened.'],
     ['linelife', 'Open vs. now vs. final on every total, plus rules that held up on two halves of history.'],
     ['matrix', 'Situational spread angles, checked against luck, matched to this week.'],
     ['tease', 'Every side teased through 3 and 7, priced as a slip.'],
@@ -42,7 +44,7 @@ export async function render(el, { toolById }) {
       <td>${k}${k === 'Spread' ? ` <span class="dim">(${esc(g.home)})</span>` : ''}</td><td class="r num">${k === 'Spread' ? line(open) : open}</td><td class="r num">${k === 'Spread' ? line(n) : n}</td><td class="r num ${mv > 0 ? 'gold' : 'clay'}">${sgn(mv)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No moves yet.</td></tr>'}
     </table></div></div>
   <div class="sec"><h2>Tools</h2><div class="grid g2">${tools.map(([id, d]) => `<a class="card" href="#${id}" style="color:inherit;text-decoration:none"><b class="disp" style="font-size:22px">${esc(toolById[id].name)}</b><p class="muted" style="margin:4px 0 0">${esc(d)}</p></a>`).join('')}</div>
-    <p class="muted" style="font-size:13.5px">In the Paint, Redzone, and Slant are being rebuilt; their pages say what’s left.</p></div>
+    <p class="muted" style="font-size:13.5px">Slant is waiting on this week’s prop lines; its page says what’s left.</p></div>
   ${footNote('Lines, scores, and TV: DraftKings and ESPN via ESPN’s public scoreboard, checked every 5 minutes.')}`;
   el.querySelector('[data-act=refresh]').onclick = () => { clearCache(); draw(); };
   liveCount = live.length;
