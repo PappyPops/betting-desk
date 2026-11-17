@@ -1,4 +1,4 @@
-import { esc, footNote } from './core.js?v=202611162102';
+import { esc, footNote } from './core.js?v=202611162122';
 
 const INFO = {
   juice: {
@@ -15,7 +15,7 @@ const INFO = {
   },
   slant: {
     what: 'NFL player props ranked by expected value, plus mismatches when a starter is out.',
-    status: 'Waiting on a prop-line source. Bovada returned nothing from the free backend, and there’s no public prop feed lined up yet.',
+    status: 'In progress. Player stats from nflverse are loading; DraftKings prop lines come through ESPN once books post them midweek.',
     keep: 'https://slant.grok.me',
     plan: ['Projections from open nflverse player stats', 'Grade every prop after the game so the EV numbers earn a record'],
   },
