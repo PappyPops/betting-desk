@@ -1,9 +1,9 @@
 // Best bets: every tool's current reads on the same games, weighted by how each tool has actually done on games
 // it hadn't seen yet. A source with no record, or a record under break-even, gets no weight.
-import { api, games } from './core.js?v=202611162301';
-import { matrixData } from './matrix.js?v=202611162301';
-import { RESEARCH, BREAK_EVEN } from './research.js?v=202611162301';
-import { CUTS, grade as cutGrade } from './linelife.js?v=202611162301';
+import { api, games } from './core.js?v=202611162303';
+import { matrixData } from './matrix.js?v=202611162303';
+import { RESEARCH, BREAK_EVEN } from './research.js?v=202611162303';
+import { CUTS, grade as cutGrade } from './linelife.js?v=202611162303';
 
 const BE = 110 / 210;
 const K = 150; // shrink each record toward break-even as if it had 150 more games at exactly break-even
@@ -25,7 +25,7 @@ export { gradeFinal };
 
 export async function bestBets() {
   const now = Date.now();
-  const from = new Date(now - 3600e3).toISOString(), to = new Date(now + 4 * 86400e3).toISOString();
+  const from = new Date(now - 3600e3).toISOString(), to = new Date(now + 8 * 86400e3).toISOString(); // a full NFL week ahead
   const [mx, nfl, cfb, nba, juiceOpen, juiceDone, picks] = await Promise.all([
     matrixData(),
     games({ league: 'nfl', from, to }), games({ league: 'cfb', from, to }), games({ league: 'nba', from, to }),

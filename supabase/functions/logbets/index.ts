@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
       score: Number.isFinite(Number(b.score)) ? Number(b.score) : null, tier: b.tier === 'best' ? 'best' : 'lean', sources: String(b.sources ?? '').slice(0, 300), updated_at: new Date().toISOString() });
   }
   // drop not-yet-started bets that are no longer on the list (only within the window the page looks at)
-  const horizon = new Date(now + 4 * 86400e3).toISOString();
+  const horizon = new Date(now + 8 * 86400e3).toISOString();
   const { data: open } = await sb.from('best_bets').select('id').gt('start_time', new Date(now).toISOString()).lt('start_time', horizon);
   const keep = new Set(rows.map((r) => r.id));
   const drop = (open ?? []).map((r: any) => r.id).filter((id: string) => !keep.has(id));

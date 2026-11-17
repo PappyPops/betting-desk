@@ -1,5 +1,5 @@
-import { games, api, esc, logo, line, sgn, odds, pct, fmtTime, fmtDay, footNote, lastSync, ago, clearCache, howTo, wireHow, SB_URL, SB_KEY } from './core.js?v=202611162301';
-import { bestBets, gradeFinal } from './bets.js?v=202611162301';
+import { games, api, esc, logo, line, sgn, odds, pct, fmtTime, fmtDay, footNote, lastSync, ago, clearCache, howTo, wireHow, SB_URL, SB_KEY } from './core.js?v=202611162303';
+import { bestBets, gradeFinal } from './bets.js?v=202611162303';
 
 const LG = { nfl: 'NFL', cfb: 'College', nba: 'NBA' };
 
@@ -83,7 +83,7 @@ async function fillBets(box) {
       <div class="card stat"><div class="k">Best bets record</div><div class="v num">${rt(recs.best)}</div><div class="s">${pct(rp(recs.best), 1)} · break-even 52.4%</div></div>
       <div class="card stat"><div class="k">Leans record</div><div class="v num">${rt(recs.lean)}</div><div class="s">${pct(rp(recs.lean), 1)}</div></div>
       <div class="card stat"><div class="k">Teaser legs</div><div class="v num">${rt(recs.tease)}</div><div class="s">${pct(rp(recs.tease), 1)} · leg break-even 72.4%</div></div>
-      <div class="card stat"><div class="k">On the board</div><div class="v num">${straight.filter((b) => b.tier === 'best').length} + ${straight.filter((b) => b.tier === 'lean').length}</div><div class="s">best bets + leans, next 4 days</div></div></div>
+      <div class="card stat"><div class="k">On the board</div><div class="v num">${straight.filter((b) => b.tier === 'best').length} + ${straight.filter((b) => b.tier === 'lean').length}</div><div class="s">best bets + leans, next 8 days</div></div></div>
     <p class="stamp" style="margin-top:0">Logged at the line shown when the page is opened before kickoff and frozen at kickoff. Record started Nov 16, 2026.</p>
     ${straight.length ? `<div class="grid g3">${straight.map(card).join('')}</div>` : '<div class="empty">Nothing clears the bar right now. That happens; no bet is a fine bet.</div>'}
     ${legs.length ? `<div class="sec"><h2 style="font-size:20px">Teaser legs</h2><p class="sub">${legs.length >= 2 ? `Pair any two as a 6-point, 2-team teaser at −110 (each leg needs 72.4%).` : 'One qualifying leg so far; it needs a partner for a 2-team teaser.'}</p><div class="grid g3">${legs.map(card).join('')}</div></div>` : ''}
