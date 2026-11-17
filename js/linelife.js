@@ -1,5 +1,5 @@
-import { games, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611162210';
-import { nflHist } from './hist.js?v=202611162210';
+import { games, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611162211';
+import { nflHist } from './hist.js?v=202611162211';
 
 // Totals rules written up front (not mined from the data), then checked on two separate halves of history.
 const CUTS = [

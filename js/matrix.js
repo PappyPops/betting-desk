@@ -1,7 +1,7 @@
-import { games as loadGames, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, logo } from './core.js?v=202611162210';
-import { nflHist } from './hist.js?v=202611162210';
-import { makeContext, parseSystem, matchSystem, gradePick, pickLabel } from './systems.js?v=202611162210';
-import { RESEARCH, gradeResearch, researchLabel, BREAK_EVEN, nbaGames } from './research.js?v=202611162210';
+import { games as loadGames, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, logo } from './core.js?v=202611162211';
+import { nflHist } from './hist.js?v=202611162211';
+import { makeContext, parseSystem, matchSystem, gradePick, pickLabel } from './systems.js?v=202611162211';
+import { RESEARCH, gradeResearch, researchLabel, BREAK_EVEN, nbaGames } from './research.js?v=202611162211';
 
 const NFL_IN_RECORD = (g) => g.season < 2026 || (g.season === 2026 && g.week <= 9); // Grok's NFL records run through 2026 week 9
 const CFB_FROM_WEEK = 5; // Grok's college records run through 2026 week 4
@@ -138,8 +138,8 @@ export async function render(el) {
   const resRate = (b) => b.w + b.l ? b.w / (b.w + b.l) : null;
   function verdict(r) {
     const a = r.after, be = BREAK_EVEN[r.kind];
-    if (r.kind === 'moneyline') { if (a.n < 60) return ['Too new to judge', '']; const roi = a.u / a.n; return roi > 0.02 ? ['Holding up', 'mint'] : roi > -0.02 ? ['About even', ''] : ['Faded', 'clay']; }
-    if (a.n < 60) return ['Too new to judge', ''];
+    if (r.kind === 'moneyline') { if (a.n < 150) return ['Too few games yet', '']; const roi = a.u / a.n; return roi > 0.02 ? ['Holding up', 'mint'] : roi > -0.02 ? ['About even', ''] : ['Faded', 'clay']; }
+    if (a.n < 150) return ['Too few games yet', ''];
     const p = resRate(a); return p > be + 0.01 ? ['Holding up', 'mint'] : p > be - 0.01 ? ['About break-even', ''] : ['Faded', 'clay'];
   }
   function researchView() {
