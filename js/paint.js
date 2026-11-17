@@ -1,4 +1,4 @@
-import { games, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn } from './core.js?v=202611162138';
+import { games, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn } from './core.js?v=202611162141';
 
 // Edges a projection needs over the DraftKings number before it counts as a lock.
 const EDGE = { pre: 5, q1: 6, half: 6, q3: 5 };
@@ -108,10 +108,11 @@ export async function render(el) {
         <div class="row" style="justify-content:space-between;margin-top:8px"><span class="team">${logo(d.away)}<span><b>${esc(d.away.short)}</b> <span class="dim">${esc(d.away.rec || '')}</span></span></span>${kind === 'live' ? `<b class="disp num" style="font-size:22px">${d.away.score ?? 0}</b>` : `<span class="num dim">${pr ? pr.ap.toFixed(0) : ''}</span>`}</div>
         <div class="row" style="justify-content:space-between"><span class="team">${logo(d.home)}<span><b>${esc(d.home.short)}</b> <span class="dim">${esc(d.home.rec || '')}</span></span></span>${kind === 'live' ? `<b class="disp num" style="font-size:22px">${d.home.score ?? 0}</b>` : `<span class="num dim">${pr ? pr.hp.toFixed(0) : ''}</span>`}</div>
         <div class="grid" style="grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px">
-          <div class="stat"><div class="k">DK total</div><div class="v num" style="font-size:24px">${ln ?? '—'}</div></div>
+          <div class="stat"><div class="k">${kind === 'live' ? 'Pregame total' : 'DK total'}</div><div class="v num" style="font-size:24px">${ln ?? '—'}</div></div>
           <div class="stat"><div class="k">Projected</div><div class="v num" style="font-size:24px">${projT !== null ? projT.toFixed(1) : '—'}</div></div>
           <div class="stat"><div class="k">Edge</div><div class="v num ${lean ? 'gold' : 'dim'}" style="font-size:24px">${edge !== null ? sgn(edge) : '—'}</div></div></div>
-        ${lean ? `<div style="margin-top:8px"><span class="chip gold">${lean} ${ln}</span>${kind === 'live' ? ' <span class="dim" style="font-size:12px">vs the closing total</span>' : ''}</div>` : `<div class="dim" style="font-size:12.5px;margin-top:8px">${pr ? `No total lock. Needs ${need}+ points of edge.` : 'Not enough games yet to project.'}</div>`}
+        ${kind === 'live' ? `<div class="dim" style="font-size:12.5px;margin-top:8px">Projected final from the score so far. The pregame total is shown for reference only; compare the projection with the live total at your book.</div>`
+          : lean ? `<div style="margin-top:8px"><span class="chip gold">${lean} ${ln}</span></div>` : `<div class="dim" style="font-size:12.5px;margin-top:8px">${pr ? `No total lock. Needs ${need}+ points of edge.` : 'Not enough games yet to project.'}</div>`}
         ${kind === 'pre' && spLean ? `<div class="dim" style="font-size:12.5px;margin-top:4px">Spread lean: <b class="muted">${esc(spLean.short)} ${line(spLine)}</b> (projected margin ${sgn(pr.margin, 1)} for ${esc(d.home.abbr)})</div>` : ''}
       </div>`;
     };
@@ -122,11 +123,15 @@ export async function render(el) {
     ${howTo('How it works', `<ol>
       <li><b>Before tip:</b> each team’s scoring and points allowed this season, weighted toward recent games and pulled toward league average early on, plus home court. A lock needs ${EDGE.pre}+ points of edge.</li>
       <li><b>At each break:</b> points so far plus a projection for the rest, leaning more on the live pace as the game goes on. Locks need ${EDGE.q1}+ (1Q, half) or ${EDGE.q3}+ (3Q).</li>
-      <li><b>The book</b> grades every lock this season against the closing total, using only games played before that day. Free live lines aren’t available, so quarter-break locks are graded against the close too. At −110 you need ${pct(BE, 1)}.</li></ol>`, 'paint')}
-    <div class="sec" style="margin-top:0"><h2>The book</h2><p class="sub">This season, every game, graded honestly.</p>
-    <div class="grid g4">${STAGES.map(([k, label]) => { const b = book[k]; const p = rp(b);
-      return `<div class="card stat"><div class="k">${label}</div><div class="v num">${rec(b)}</div><div class="s ${p !== null && p > BE ? 'mint' : p !== null ? 'clay' : ''}">${pct(p, 1)}${b.ow + b.ol ? ` · overs ${b.ow}–${b.ol}` : ''}</div></div>`; }).join('')}</div>
-    <p class="stamp">Spread leans (${SPREAD_EDGE}+ points off the close): ${rec(sp)} · ${pct(rp(sp), 1)}. The old version claimed End 3Q Overs at 55–4; that kind of number shows up when a lock is graded against a line that was already stale.</p></div>
+      <li><b>The book</b> grades every pregame lock this season against the closing total, using only games played before that day. At −110 you need ${pct(BE, 1)}. Quarter-break locks will be graded once enough live totals have been logged.</li></ol>`, 'paint')}
+    <div class="sec" style="margin-top:0"><h2>The book</h2><p class="sub">Every pregame lock this season, using only games played before that day, graded against the DraftKings close.</p>
+    <div class="grid g4">
+      <div class="card stat"><div class="k">Pregame totals</div><div class="v num">${rec(book.pre)}</div><div class="s ${rp(book.pre) !== null && rp(book.pre) > BE ? 'mint' : 'clay'}">${pct(rp(book.pre), 1)} · break-even ${pct(BE, 1)}</div></div>
+      <div class="card stat"><div class="k">Pregame overs</div><div class="v num">${book.pre.ow + book.pre.ol ? `${book.pre.ow}–${book.pre.ol}` : '—'}</div><div class="s">unders ${book.pre.w - book.pre.ow}–${book.pre.l - book.pre.ol}</div></div>
+      <div class="card stat"><div class="k">Spread leans</div><div class="v num">${rec(sp)}</div><div class="s">${pct(rp(sp), 1)} · ${SPREAD_EDGE}+ points off the close</div></div>
+      <div class="card stat"><div class="k">Quarter breaks</div><div class="v" style="font-size:20px;line-height:1.2">Not graded yet</div><div class="s">needs the live line at that moment</div></div>
+    </div>
+    <p class="stamp">Why quarter breaks aren’t graded: by the end of the 3rd quarter most of the score is known, so grading against the pregame total wins almost every time (it would show about ${pct(rp(book.q3), 0)} here). That’s how the old version got End 3Q Overs at 55–4. Live totals from Action Network are now being logged every 10 minutes so these can be graded against the real number going forward.</p></div>
     ${live.length ? `<div class="sec"><h2>On the floor</h2><div class="grid g2">${live.map((g) => gameCard(g, 'live')).join('')}</div></div>` : ''}
     <div class="sec"><div class="row" style="justify-content:space-between"><h2>Next three days</h2>${seg('start', [['all', 'All'], ['early', 'Before 8 ET'], ['late', '8 ET or later']], st.start)}</div>
       <div class="grid g2">${upcoming.map((g) => gameCard(g, 'pre')).join('') || '<div class="empty">No games posted yet.</div>'}</div></div>

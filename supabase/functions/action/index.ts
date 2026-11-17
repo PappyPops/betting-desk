@@ -93,7 +93,7 @@ async function doSplits() {
       const ids = gs.map((g: any) => g.id);
       const { data: prevRows } = await sb.from('splits_latest').select('action_id,data').in('action_id', ids.length ? ids : [0]);
       const prev = new Map((prevRows ?? []).map((r: any) => [r.action_id, r.data]));
-      const latest: any[] = [], hist: any[] = [], bets: any[] = [];
+      const latest: any[] = [], hist: any[] = [], bets: any[] = [], liveRows: any[] = [];
       for (const g of gs) {
         const home = g.teams?.find((t: any) => t.id === g.home_team_id), away = g.teams?.find((t: any) => t.id === g.away_team_id);
         const mk = readMarkets(g);
@@ -118,6 +118,9 @@ async function doSplits() {
           score: g.boxscore ? { h: g.boxscore.total_home_points ?? null, a: g.boxscore.total_away_points ?? null, clock: g.boxscore.clock ?? null, period: g.boxscore.period ?? null } : null,
           mk, sig, flipLog,
         };
+        // in-game: log the live line so quarter-break projections can be graded against the real number
+        const lo = g.boxscore?.latest_odds?.game;
+        if (g.status === 'inprogress' && lo && lo.total) liveRows.push({ action_id: g.id, league: cfg.espn, espn_id: espn, period: g.boxscore.period ?? null, clock: g.boxscore.clock ?? null, home_pts: g.boxscore.total_home_points ?? null, away_pts: g.boxscore.total_away_points ?? null, total: lo.total, spread_home: lo.spread_home ?? null, ml_home: lo.ml_home ?? null, ml_away: lo.ml_away ?? null });
         latest.push({ action_id: g.id, league: cfg.espn, espn_id: espn, start_time: g.start_time, status: g.status, num_bets: g.num_bets ?? null, data, updated_at: new Date().toISOString() });
         if (pre && (!p || JSON.stringify(p.mk) !== JSON.stringify(mk))) hist.push({ action_id: g.id, league: cfg.espn, data: mk, flips });
         if (pre) {
@@ -129,6 +132,7 @@ async function doSplits() {
       }
       if (latest.length) await sb.from('splits_latest').upsert(latest);
       if (hist.length) await sb.from('splits_hist').insert(hist);
+      if (liveRows.length) await sb.from('live_lines').insert(liveRows);
       // a pregame signal that disappears before kickoff is removed; once a game starts its last read stays
       const preIds = gs.filter((g: any) => g.status === 'scheduled').map((g: any) => g.id);
       if (preIds.length) await sb.from('juice_bets').delete().in('action_id', preIds).eq('locked', false);
