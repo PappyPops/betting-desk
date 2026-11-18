@@ -1,7 +1,7 @@
 // Shared NFL player-prop model for Slant (before kickoff) and At the Whistle (at each quarter break).
 // Projections use only weeks before the game, so past weeks can be checked honestly.
-import { api, blob, ncdf } from './core.js?v=202611180353';
-import { nflHist } from './hist.js?v=202611180353';
+import { api, blob, ncdf } from './core.js?v=202611180355';
+import { nflHist } from './hist.js?v=202611180355';
 
 export const STATS = {
   pass_yds: { label: 'Pass yds', cols: ['passing_yards'], box: ['pass_yds'], pos: ['QB'], yards: true },
@@ -163,7 +163,7 @@ function situational(d, { gsis, pos, stat, wk, ctx }) {
       const adj = clamp(1 + 0.6 * (ratio - 1) * (stat === 'rush_rec_yds' ? 0.5 : 1), 0.75, 1.35);
       const usual = [...qbRows.reduce((m, r) => m.set(r.pid, (m.get(r.pid) || 0) + r.attempts), new Map())].sort((x, y) => y[1] - x[1])[0]?.[0];
       const change = usual && usual !== ctx.qb.gsis;
-      if (Math.abs(adj - 1) >= 0.03) { f *= adj; news *= adj; notes.push(`${change ? `QB change: ${ctx.qb.name} starts. ` : ''}His passing line is ${ctx.qb.passYds} vs the ${perWk.toFixed(0)} a game this offense threw for lately: ${sgnPct(adj - 1)} for receivers.`); }
+      if (Math.abs(adj - 1) >= 0.03) { f *= adj; news *= adj; notes.push(`${change ? `QB change: ${ctx.qb.name} starts. ` : ''}${ctx.qb.name}’s passing line is ${ctx.qb.passYds} vs the ${perWk.toFixed(0)} a game this offense threw for lately: ${sgnPct(adj - 1)} for receivers.`); }
     }
   }
   // 3. weather (outdoor stadiums only)

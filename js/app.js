@@ -1,17 +1,17 @@
-import { lastSync, ago, esc } from './core.js?v=202611180353';
+import { lastSync, ago, esc } from './core.js?v=202611180355';
 
 const TOOLS = [
-  { id: 'desk', name: 'Today', grp: 'Desk', load: () => import('./desk.js?v=202611180353') },
-  { id: 'whistle', name: 'At the Whistle', grp: 'Live', load: () => import('./whistle.js?v=202611180353') },
-  { id: 'juice', name: 'The Juice', grp: 'Market', load: () => import('./juice.js?v=202611180353') },
-  { id: 'linelife', name: 'Line Life', grp: 'Market', load: () => import('./linelife.js?v=202611180353') },
-  { id: 'matrix', name: 'Matrix', grp: 'Models', load: () => import('./matrix.js?v=202611180353') },
-  { id: 'tease', name: 'Tease Me', grp: 'Models', load: () => import('./tease.js?v=202611180353') },
-  { id: 'paint', name: 'In the Paint', grp: 'Models', load: () => import('./paint.js?v=202611180353') },
-  { id: 'redzone', name: 'Redzone', grp: 'Models', load: () => import('./redzone.js?v=202611180353') },
-  { id: 'slant', name: 'Slant', grp: 'Models', load: () => import('./slant.js?v=202611180353') },
-  { id: 'capn', name: "Cap'n Cash", grp: 'Crowd', load: () => import('./capn.js?v=202611180353') },
-  { id: 'eye', name: 'Eye in the Sky', grp: 'Watch', load: () => import('./eye.js?v=202611180353') },
+  { id: 'desk', name: 'Today', grp: 'Desk', load: () => import('./desk.js?v=202611180355') },
+  { id: 'whistle', name: 'At the Whistle', grp: 'Live', load: () => import('./whistle.js?v=202611180355') },
+  { id: 'juice', name: 'The Juice', grp: 'Market', load: () => import('./juice.js?v=202611180355') },
+  { id: 'linelife', name: 'Line Life', grp: 'Market', load: () => import('./linelife.js?v=202611180355') },
+  { id: 'matrix', name: 'Matrix', grp: 'Models', load: () => import('./matrix.js?v=202611180355') },
+  { id: 'tease', name: 'Tease Me', grp: 'Models', load: () => import('./tease.js?v=202611180355') },
+  { id: 'paint', name: 'In the Paint', grp: 'Models', load: () => import('./paint.js?v=202611180355') },
+  { id: 'redzone', name: 'Redzone', grp: 'Models', load: () => import('./redzone.js?v=202611180355') },
+  { id: 'slant', name: 'Slant', grp: 'Models', load: () => import('./slant.js?v=202611180355') },
+  { id: 'capn', name: "Cap'n Cash", grp: 'Crowd', load: () => import('./capn.js?v=202611180355') },
+  { id: 'eye', name: 'Eye in the Sky', grp: 'Watch', load: () => import('./eye.js?v=202611180355') },
 ];
 export const toolById = Object.fromEntries(TOOLS.map((t) => [t.id, t]));
 
