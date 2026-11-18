@@ -1,7 +1,7 @@
 // Shared NFL player-prop model for Slant (before kickoff) and At the Whistle (at each quarter break).
 // Projections use only weeks before the game, so past weeks can be checked honestly.
-import { api, blob, ncdf } from './core.js?v=202611180352';
-import { nflHist } from './hist.js?v=202611180352';
+import { api, blob, ncdf } from './core.js?v=202611180353';
+import { nflHist } from './hist.js?v=202611180353';
 
 export const STATS = {
   pass_yds: { label: 'Pass yds', cols: ['passing_yards'], box: ['pass_yds'], pos: ['QB'], yards: true },
@@ -136,8 +136,8 @@ const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 // the situation around one game for one team: who's out, who's throwing, weather, and how the game should go
 // ctx = { team, out: [{gsis, name, pos}], qb: {gsis, name, passYds, passAtt} | null, weather, roof, spread, total }
 function situational(d, { gsis, pos, stat, wk, ctx }) {
-  const notes = []; let f = 1;
-  if (!ctx) return { f, notes };
+  const notes = []; let f = 1, news = 1;
+  if (!ctx) return { f, notes, news };
   const mine = (d.byPid.get(gsis) || []).filter((r) => r.week < wk && r.team === ctx.team).slice(-4);
   const weeks = new Set(mine.map((r) => r.week));
   const teamRows = d.rows.filter((r) => r.team === ctx.team && weeks.has(r.week));
@@ -150,7 +150,7 @@ function situational(d, { gsis, pos, stat, wk, ctx }) {
     const mineShare = shareOf(volKey, gsis);
     if (missing > 0.05 && mineShare > 0) {
       const boost = clamp(1 + missing / Math.max(0.2, 1 - missing), 1, 1.6);
-      f *= boost;
+      f *= boost; news *= boost;
       notes.push(`${gone.map((o) => `${o.name} (${o.pos})`).join(', ')} out: ${(missing * 100).toFixed(0)}% of the ${volKey} are up for grabs, about ${sgnPct(boost - 1)} for him.`);
     }
   }
@@ -163,7 +163,7 @@ function situational(d, { gsis, pos, stat, wk, ctx }) {
       const adj = clamp(1 + 0.6 * (ratio - 1) * (stat === 'rush_rec_yds' ? 0.5 : 1), 0.75, 1.35);
       const usual = [...qbRows.reduce((m, r) => m.set(r.pid, (m.get(r.pid) || 0) + r.attempts), new Map())].sort((x, y) => y[1] - x[1])[0]?.[0];
       const change = usual && usual !== ctx.qb.gsis;
-      if (Math.abs(adj - 1) >= 0.03) { f *= adj; notes.push(`${change ? `QB change: ${ctx.qb.name} starts. ` : ''}His passing line is ${ctx.qb.passYds} vs the ${perWk.toFixed(0)} a game this offense threw for lately: ${sgnPct(adj - 1)} for receivers.`); }
+      if (Math.abs(adj - 1) >= 0.03) { f *= adj; news *= adj; notes.push(`${change ? `QB change: ${ctx.qb.name} starts. ` : ''}His passing line is ${ctx.qb.passYds} vs the ${perWk.toFixed(0)} a game this offense threw for lately: ${sgnPct(adj - 1)} for receivers.`); }
     }
   }
   // 3. weather (outdoor stadiums only)
@@ -188,22 +188,26 @@ function situational(d, { gsis, pos, stat, wk, ctx }) {
     else if (PASS_STATS.has(stat) || REC_STATS.has(stat)) adj = clamp(1 - 0.005 * fav, 0.94, 1.06);
     if (Math.abs(adj - 1) >= 0.03) { f *= adj; notes.push(`${fav > 0 ? `Favored by ${fav}` : `${-fav}-point underdog`}: ${sgnPct(adj - 1)} ${RUSH_STATS.has(stat) ? 'on the ground' : 'through the air'} from game script.`); }
   }
-  return { f: clamp(f, 0.6, 1.8), notes };
+  return { f: clamp(f, 0.6, 1.8), notes, news };
 }
 const sgnPct = (x) => `${x >= 0 ? '+' : '−'}${Math.abs(x * 100).toFixed(0)}%`;
 
 // pregame projection for one player prop, using only weeks before the game
-export function project(d, { gsis, pos, stat, opp, wk, line, ctx = null }) {
+export function project(d, { gsis, pos, stat, opp, wk, line, open = null, ctx = null }) {
   const list = d.byPid.get(gsis) || [];
   const f = form(list, wk, stat); if (!f || f.games < 3) return null;
   const dfn = (d._def ??= new Map()); if (!dfn.has(wk)) dfn.set(wk, defenseFactors(d.rows, d.posOf, wk));
   const df = dfn.get(wk)(opp, pos, stat);
   const sit = situational(d, { gsis, pos, stat, wk, ctx });
   const model = f.mean * df.f * sit.f;
-  // the market line carries most of the weight; when the situation changed a lot, the model earns a little more
-  const wModel = Math.abs(sit.f - 1) >= 0.08 ? 0.35 : 0.25;
+  // The market line carries most of the weight. News the line may not have caught up to (a teammate out, a QB change)
+  // earns the model a little more; a line already moving the other way earns it less.
+  let wModel = Math.abs(sit.news - 1) >= 0.08 ? 0.35 : 0.25;
+  const moved = open && line ? (line - open) / Math.max(1, open) : 0;
+  const against = line != null && ((model > line && moved <= -0.06) || (model < line && moved >= 0.06));
+  if (against) wModel /= 2;
   const mean = line === null || line === undefined ? model : wModel * model + (1 - wModel) * line;
-  return { model, mean, form: f, def: df, sit, wModel };
+  return { model, mean, form: f, def: df, sit, wModel, against };
 }
 
 // at a quarter break: projected final from the stat so far, the prior, pace, game script and the clock

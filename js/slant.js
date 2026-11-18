@@ -1,11 +1,11 @@
 // Slant: NFL player props before kickoff, ranked by expected value at −110, with every pick graded after the game.
-import { api, games, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611180352';
-import { STATS, TYPE_GROUP, propData, project, probOver, boxVal, calibrate } from './propmodel.js?v=202611180352';
+import { api, games, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611180353';
+import { STATS, TYPE_GROUP, propData, project, probOver, boxVal, calibrate } from './propmodel.js?v=202611180353';
 
 const PAY = 100 / 110;
 export const MIN_EV = 0.06; // a pick needs 6%+ expected value at −110 (about 55.5% to win)
 // TD counts and tiny lines (1.5 catches and the like) usually carry heavy juice that the free feed doesn't show, so they're priced but never picked
-const PICKABLE = (r) => r.p.stat !== 'pass_td' && !(r.line < 2.5 && !STATS[r.p.stat].yards);
+const PICKABLE = (r) => r.p.stat !== 'pass_td' && !(r.line < 2.5 && !STATS[r.p.stat].yards) && !r.status; // and never a player on the injury report
 
 export async function slantRows() {
   const d = await propData();
@@ -49,7 +49,7 @@ export async function slantRows() {
     const opp = team === hg.home_team ? hg.away_team : hg.home_team;
     const pos = d.posOf.get(a.gsis) || a.pos;
     const line = Number(g.state === 'pre' ? p.line_now : p.line_close);
-    const pr = project(d, { gsis: a.gsis, pos, stat: p.stat, opp, wk: hg.week, line, ctx }); if (!pr) continue;
+    const pr = project(d, { gsis: a.gsis, pos, stat: p.stat, opp, wk: hg.week, line, open: Number(p.line_open), ctx }); if (!pr) continue;
     const pO = probOver(p.stat, pr.mean, line);
     const side = pO >= 0.5 ? 'over' : 'under', pS = side === 'over' ? pO : 1 - pO;
     const ev = pS * PAY - (1 - pS);
@@ -88,7 +88,7 @@ export async function render(el) {
       <div class="row" style="gap:10px;margin-top:6px">${r.a.headshot ? `<img src="${esc(r.a.headshot)}" alt="" width="44" height="44" style="border-radius:50%;object-fit:cover;background:var(--line2)">` : ''}<div><div class="disp" style="font-size:20px">${esc(r.a.name)}</div><div style="font-size:13px">${esc(STATS[r.p.stat].label)} · <b>${r.side === 'over' ? 'Over' : 'Under'} ${r.line}</b>${r.open !== r.line ? ` <span class="dim">(opened ${r.open})</span>` : ''}</div></div>
         <div style="margin-left:auto;text-align:right"><div class="disp mint" style="font-size:22px">+${(r.ev * 100).toFixed(1)}%</div><div class="dim" style="font-size:11.5px">EV at −110</div></div></div>
       <div style="font-size:12.5px;margin-top:8px">Projected <b>${r.pr.mean.toFixed(1)}</b> (form and matchup ${r.pr.model.toFixed(1)}, then weighted ${Math.round(r.pr.wModel * 100)}/${Math.round(100 - r.pr.wModel * 100)} with the line) · ${pct(r.pS, 0)} to hit</div>
-      ${r.pr.sit.notes.length || r.status ? `<div style="font-size:12.5px;margin-top:6px;padding-top:6px;border-top:1px solid var(--line2)">${r.status ? `<span class="chip clay">${esc(r.status)}</span> ` : ''}${r.pr.sit.notes.map((n) => `<div>• ${esc(n)}</div>`).join('')}</div>` : ''}
+      ${r.pr.sit.notes.length || r.pr.against ? `<div style="font-size:12.5px;margin-top:6px;padding-top:6px;border-top:1px solid var(--line2)">${r.pr.against ? '<div class="clay">• The line has moved the other way since it opened, so the model counts for half as much.</div>' : ''}${r.pr.sit.notes.map((n) => `<div>• ${esc(n)}</div>`).join('')}</div>` : ''}
       <div class="dim" style="font-size:12.5px">Last ${r.pr.form.last.length}: ${r.pr.form.last.map((x) => Math.round(x * 10) / 10).join(' · ')}. ${esc(posRank(r))}</div></div>`;
     el.innerHTML = `
     <div class="ph"><div><div class="kicker">NFL player props</div><h1>Slant</h1><p>Every DraftKings player prop priced against recent form and the matchup, ranked by expected value. Every pick is graded after the game.</p></div>
@@ -96,9 +96,9 @@ export async function render(el) {
     ${howTo('How it works', `<ol><li><b>Form:</b> the player’s last four games (weighted toward the latest) blended with his season average.</li>
       <li><b>Matchup:</b> what the opponent has allowed to that position, compared with the league, pulled toward average until there are enough games.</li>
       <li><b>The situation:</b> a teammate ruled out (his share of targets or carries moves to the players left), who’s throwing (the starting QB’s own passing line against what the offense has thrown for lately, which catches a QB change like Cousins back in Minnesota), wind, rain and cold at outdoor stadiums, and game script from the spread (favorites run, underdogs throw). Every adjustment is spelled out on the card.</li>
-      <li><b>The line counts most.</b> The model gets 25% and DraftKings’ line 75% (35/65 when the situation moves the model 8% or more), because the market already knows things a box score doesn’t (injuries, snap counts, weather).</li>
+      <li><b>The line counts most.</b> The model gets 25% and DraftKings’ line 75% (35/65 when a teammate being out or a QB change moves the model 8% or more; half the usual weight when the line has already moved against the model), because the market already knows things a box score doesn’t (injuries, snap counts, weather).</li>
       <li><b>Spread</b> comes from how far this model’s own projections missed in earlier weeks this season, so the percentages are measured, not assumed.</li>
-      <li><b>EV</b> assumes −110 on both sides; DraftKings’ actual prices aren’t in the free feed, so check your book. A pick needs ${(MIN_EV * 100).toFixed(0)}%+. Touchdown counts and tiny lines (like 1.5 catches) are skipped because they usually carry juice the feed doesn’t show.</li>
+      <li><b>EV</b> assumes −110 on both sides; DraftKings’ actual prices aren’t in the free feed, so check your book. A pick needs ${(MIN_EV * 100).toFixed(0)}%+, and players on the injury report are never picked. Touchdown counts and tiny lines (like 1.5 catches) are skipped because they usually carry juice the feed doesn’t show.</li>
       <li><b>The weights get tuned on results.</b> Once a few weeks are graded, the 25/75 split and the 6% bar get checked against what actually hit.</li></ol>`, 'sl')}
     <div class="grid g4">
       <div class="card stat"><div class="k">Record</div><div class="v num">${all.w + all.l ? rt(all) : '—'}</div><div class="s">${pct(rp(all), 1)} · break-even 52.4%</div></div>
