@@ -1,5 +1,5 @@
-import { games, api, esc, logo, line, sgn, odds, pct, fmtTime, fmtDay, footNote, lastSync, ago, clearCache, howTo, wireHow, SB_URL, SB_KEY } from './core.js?v=202611171325';
-import { bestBets, gradeFinal } from './bets.js?v=202611171325';
+import { games, api, esc, logo, line, sgn, odds, pct, fmtTime, fmtDay, footNote, lastSync, ago, clearCache, howTo, wireHow, SB_URL, SB_KEY } from './core.js?v=202611180333';
+import { bestBets, gradeFinal } from './bets.js?v=202611180333';
 
 const LG = { nfl: 'NFL', cfb: 'College', nba: 'NBA' };
 
@@ -17,6 +17,8 @@ export async function render(el, { toolById }) {
   const tools = [
     ['juice', 'Where the tickets are versus where the money is, with every read graded.'],
     ['capn', 'Public handicapper picks stacked by side, with each one’s record.'],
+    ['whistle', 'NFL live player props at every quarter break, locked at the whistle and graded.'],
+    ['slant', 'NFL player props before kickoff, ranked by expected value.'],
     ['paint', 'NBA totals projected before tip and at every quarter break, with the season graded.'],
     ['redzone', 'Anytime touchdown chances, checked against what actually happened.'],
     ['linelife', 'Open vs. now vs. final on every total, plus rules that held up on two halves of history.'],
@@ -34,7 +36,7 @@ export async function render(el, { toolById }) {
     ${(g.close_spread_home ?? g.spread_home) !== null ? `<div class="dim" style="font-size:12px;margin-top:6px">Closed ${esc(g.data.home.abbr)} ${line(Number(g.close_spread_home ?? g.spread_home))} · O/U ${g.close_total ?? g.total ?? '—'}</div>` : ''}</div>`).join('')}</div></div>` : ''}
   <div class="sec" id="bb"><h2>Best bets</h2><div class="loading" style="padding:20px 0">Checking every tool against every game…</div></div>
   <div class="sec"><h2>Tools</h2><div class="grid g2">${tools.map(([id, d]) => `<a class="card" href="#${id}" style="color:inherit;text-decoration:none"><b class="disp" style="font-size:22px">${esc(toolById[id].name)}</b><p class="muted" style="margin:4px 0 0">${esc(d)}</p></a>`).join('')}</div>
-    <p class="muted" style="font-size:13.5px">Slant is waiting on this week’s prop lines; its page says what’s left.</p></div>
+</div>
   ${footNote('Lines, scores, and TV: DraftKings and ESPN via ESPN’s public scoreboard, checked every 5 minutes.')}`;
   el.querySelector('[data-act=refresh]').onclick = () => { clearCache(); draw(); };
   liveCount = live.length;

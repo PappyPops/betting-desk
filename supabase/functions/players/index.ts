@@ -34,5 +34,20 @@ Deno.serve(async () => {
   }
   const data = { season: SEASON, cols: ['pid', 'week', 'team', 'opp', ...NUM], rows, players, at: new Date().toISOString(), source: 'nflverse stats_player_week' };
   const { error } = await sb.from('blobs').upsert({ key: `nfl_players_${SEASON}`, data, updated_at: new Date().toISOString() });
-  return new Response(JSON.stringify({ rows: rows.length, players: Object.keys(players).length, error: error?.message ?? null }), { headers: { 'content-type': 'application/json' } });
+  // ESPN athlete id <-> nflverse gsis id, so prop lines (ESPN ids) can be matched to weekly stats (gsis ids)
+  let mapped = 0;
+  try {
+    const pr = await fetch('https://github.com/nflverse/nflverse-data/releases/download/players/players.csv', { headers: { 'User-Agent': 'BettingDesk/1.0' } });
+    const pl = (await pr.text()).split(/\r?\n/).filter(Boolean);
+    const ph = splitCSV(pl[0]); const px = (c: string) => ph.indexOf(c);
+    const P = { g: px('gsis_id'), e: px('espn_id'), n: px('display_name'), pos: px('position'), t: px('latest_team'), h: px('headshot'), last: px('last_season') };
+    const ups: any[] = [];
+    for (let i = 1; i < pl.length; i++) {
+      const f = splitCSV(pl[i]);
+      if (!f[P.e] || Number(f[P.last]) < SEASON - 1 || !['QB', 'RB', 'WR', 'TE', 'FB'].includes(f[P.pos])) continue;
+      ups.push({ id: String(Number(f[P.e])), gsis: f[P.g], name: f[P.n], pos: f[P.pos], team: f[P.t] || null, headshot: f[P.h] || null, updated_at: new Date().toISOString() });
+    }
+    for (let i = 0; i < ups.length; i += 500) { const { error: e2 } = await sb.from('athletes').upsert(ups.slice(i, i + 500)); if (!e2) mapped += Math.min(500, ups.length - i); }
+  } catch (_) { /* mapping is best-effort */ }
+  return new Response(JSON.stringify({ rows: rows.length, players: Object.keys(players).length, mapped, error: error?.message ?? null }), { headers: { 'content-type': 'application/json' } });
 });

@@ -12,3 +12,6 @@ select cron.schedule('picks-other', '13 */2 * * *', $$select public.call_fn('pic
 select cron.schedule('players-nfl', '52 10 * * *', $$select public.call_fn('players', 120000)$$);
 
 select cron.schedule('nba-breaks', '* 0-7,16-23 * * *', $$select public.call_fn('breaks', 30000)$$);
+
+select cron.schedule('props-nfl', '7,37 * * * *', $$select public.call_fn('props', 120000)$$);
+select cron.schedule('nfl-whistle', '* 0-6,16-23 * * *', $$select public.call_fn('whistle', 60000)$$);
