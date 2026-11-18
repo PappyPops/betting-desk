@@ -1,6 +1,7 @@
 // Slant: NFL player props before kickoff, ranked by expected value at −110, with every pick graded after the game.
-import { api, games, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611180355';
-import { STATS, TYPE_GROUP, propData, project, probOver, boxVal, calibrate } from './propmodel.js?v=202611180355';
+import { api, games, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611180358';
+import { STATS, TYPE_GROUP, propData, project, probOver, boxVal, calibrate } from './propmodel.js?v=202611180358';
+import { trackBtn } from './mybets.js?v=202611180358';
 
 const PAY = 100 / 110;
 export const MIN_EV = 0.06; // a pick needs 6%+ expected value at −110 (about 55.5% to win)
@@ -89,7 +90,8 @@ export async function render(el) {
         <div style="margin-left:auto;text-align:right"><div class="disp mint" style="font-size:22px">+${(r.ev * 100).toFixed(1)}%</div><div class="dim" style="font-size:11.5px">EV at −110</div></div></div>
       <div style="font-size:12.5px;margin-top:8px">Projected <b>${r.pr.mean.toFixed(1)}</b> (form and matchup ${r.pr.model.toFixed(1)}, then weighted ${Math.round(r.pr.wModel * 100)}/${Math.round(100 - r.pr.wModel * 100)} with the line) · ${pct(r.pS, 0)} to hit</div>
       ${r.pr.sit.notes.length || r.pr.against ? `<div style="font-size:12.5px;margin-top:6px;padding-top:6px;border-top:1px solid var(--line2)">${r.pr.against ? '<div class="clay">• The line has moved the other way since it opened, so the model counts for half as much.</div>' : ''}${r.pr.sit.notes.map((n) => `<div>• ${esc(n)}</div>`).join('')}</div>` : ''}
-      <div class="dim" style="font-size:12.5px">Last ${r.pr.form.last.length}: ${r.pr.form.last.map((x) => Math.round(x * 10) / 10).join(' · ')}. ${esc(posRank(r))}</div></div>`;
+      <div class="dim" style="font-size:12.5px">Last ${r.pr.form.last.length}: ${r.pr.form.last.map((x) => Math.round(x * 10) / 10).join(' · ')}. ${esc(posRank(r))}</div>
+      <div style="text-align:right;margin-top:8px">${trackBtn({ gid: String(r.p.game_id), market: 'prop', aid: String(r.p.athlete_id), stat: r.p.stat, side: r.side, line: r.line, name: r.a.name, game: `${r.team} vs ${r.opp}`, start: r.g.start_time, tool: 'Slant' })}</div></div>`;
     el.innerHTML = `
     <div class="ph"><div><div class="kicker">NFL player props</div><h1>Slant</h1><p>Every DraftKings player prop priced against recent form and the matchup, ranked by expected value. Every pick is graded after the game.</p></div>
       <button class="btn" data-act="refresh">↻ Refresh</button></div>

@@ -1,8 +1,9 @@
 // At the Whistle: NFL live player props at the end of Q1, halftime and the end of Q3. Each ticket is the projected
 // final against the line at that moment, locked at the whistle and graded on the final box score.
-import { api, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611180355';
-import { STATS, TYPE_GROUP, propData, project, atWhistle, boxVal, calibrate } from './propmodel.js?v=202611180355';
-import { ncdf } from './core.js?v=202611180355';
+import { api, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611180358';
+import { STATS, TYPE_GROUP, propData, project, atWhistle, boxVal, calibrate } from './propmodel.js?v=202611180358';
+import { trackBtn } from './mybets.js?v=202611180358';
+import { ncdf } from './core.js?v=202611180358';
 
 const QN = { 1: 'End Q1', 2: 'Halftime', 3: 'End Q3' };
 const NEED = { over: 0.6, under: 0.58 }; // overs need more of an edge than unders
@@ -103,7 +104,8 @@ export async function render(el) {
       <div style="position:relative;height:8px;background:var(--line2);border-radius:4px;margin:10px 0 6px"><div style="position:absolute;left:0;top:0;bottom:0;width:${Math.min(100, t.now / span * 100)}%;background:var(--dim);border-radius:4px"></div>
         <div title="line" style="position:absolute;top:-2px;width:3px;height:12px;background:var(--ink);left:${Math.min(100, t.ln / span * 100)}%"></div><div title="fair" style="position:absolute;top:-2px;width:10px;height:12px;border-radius:6px;background:var(--mint);left:calc(${Math.min(100, t.m.fair / span * 100)}% - 5px)"></div></div>
       <div class="dim" style="font-size:12.5px">${Math.round(t.now * 10) / 10} so far · full-game pace ${t.m.pace.toFixed(0)} vs pregame expectation ${t.pre}. ${esc(t.m.note)}</div>
-      <div class="row" style="justify-content:space-between;margin-top:6px;font-size:13px"><span class="dim">Edge</span><b class="num">${sgn(t.edge)} ${unit} · ${pct(t.pS, 0)}</b></div></div>`;
+      <div class="row" style="justify-content:space-between;margin-top:6px;font-size:13px"><span class="dim">Edge</span><b class="num">${sgn(t.edge)} ${unit} · ${pct(t.pS, 0)}</b></div>
+      ${t.result ? '' : `<div style="text-align:right;margin-top:6px">${trackBtn({ gid: String(t.p.game_id), market: 'prop', aid: String(t.p.athlete_id), stat: t.p.stat, side: t.side, line: t.ln, q: QN[t.q], name: t.a.name, game: `${t.g.away} @ ${t.g.home}`, start: t.g.start_time, tool: 'At the Whistle' })}</div>`}</div>`;
     };
     const wkSel = st.wk === 'all' ? (weeks[weeks.length - 1] ?? null) : Number(st.wk);
     const ticketsWk = shown.filter((t) => t.result && t.week === wkSel).sort((a, b) => a.q - b.q || b.pS - a.pS);

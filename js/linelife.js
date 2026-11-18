@@ -1,6 +1,7 @@
-import { games, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611180355';
-import { flagNow, loadFlags, gradeFlags, TRIG, historyNote } from './moves.js?v=202611180355';
-import { nflHist } from './hist.js?v=202611180355';
+import { games, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611180358';
+import { flagNow, loadFlags, gradeFlags, TRIG, historyNote } from './moves.js?v=202611180358';
+import { trackBtn } from './mybets.js?v=202611180358';
+import { nflHist } from './hist.js?v=202611180358';
 
 // Totals rules written up front (not mined from the data), then checked on two separate halves of history.
 export const CUTS = [
@@ -115,7 +116,7 @@ export async function render(el) {
         <div class="disp" style="font-size:22px;margin:2px 0">${esc(pick(g, f, f.num))}</div>
         <div style="font-size:13px">Opened ${esc(pick(g, f, f.open))} · moved ${f.move} toward this side</div>
         ${(() => { const h = historyNote(st.lg, f); return h && h.tone === 'clay' ? `<div style="font-size:13px;margin-top:6px;padding-top:6px;border-top:1px solid var(--line2)" class="clay"><b>${esc(h.text)}</b></div>`
-          : `<div style="font-size:13px;margin-top:6px;padding-top:6px;border-top:1px solid var(--line2)"><b class="mint">Get it at ${esc(pick(g, f, f.num))} or better.</b> <span class="clay">Pass past ${esc(pick(g, f, f.limit))}.</span>${h ? `<div class="mint" style="font-size:12.5px;margin-top:4px">${esc(h.text)}</div>` : ''}</div>`; })()}</div>`).join('')}</div>` : '<div class="empty">No line has moved enough yet.</div>'}
+          : `<div style="font-size:13px;margin-top:6px;padding-top:6px;border-top:1px solid var(--line2)"><b class="mint">Get it at ${esc(pick(g, f, f.num))} or better.</b> <span class="clay">Pass past ${esc(pick(g, f, f.limit))}.</span>${h ? `<div class="mint" style="font-size:12.5px;margin-top:4px">${esc(h.text)}</div>` : ''}<div style="text-align:right;margin-top:6px">${trackBtn({ gid: String(g.id), market: f.mk, side: f.side, line: f.num, label: pick(g, f, f.num), game: `${team(g, 'away')} @ ${team(g, 'home')}`, start: g.start_time, tool: 'Line Life' })}</div></div>`; })()}</div>`).join('')}</div>` : '<div class="empty">No line has moved enough yet.</div>'}
       <div class="card" style="padding:4px 12px;overflow-x:auto;margin-top:12px"><table class="t"><tr><th>Does the flag work?</th><th class="r">Line kept moving past the flag</th><th class="r">Record at the flagged number</th></tr>
         ${[['all', 'All leagues'], ...['nfl', 'cfb', 'nba'].flatMap((lg) => [[`${lg}:tot`, `${LGN[lg]} totals`], [`${lg}:sp`, `${LGN[lg]} spreads`]])].map(([k, lab]) => `<tr><td>${lab}</td><td class="r num">${flagRec ? clvCell(fr(k)) : '…'}</td><td class="r num">${flagRec ? recCell(fr(k)) : '…'}</td></tr>`).join('')}</table></div>
       <p class="stamp">NFL history notes: TeamRankings’ opening and closing lines since 2008, graded at the close. Each flag is frozen the first time it fires (every line change has been saved since Nov 16, 2026) and graded at that number. “Kept moving” means the closing line ended up worse than the flagged number, so taking the flag beat the close. Break-even is 52.4% at −110. These rules were written before any flag was graded.</p></div>`;

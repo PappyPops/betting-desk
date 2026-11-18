@@ -1,5 +1,6 @@
-import { games, api, esc, logo, line, sgn, odds, pct, fmtTime, fmtDay, footNote, lastSync, ago, clearCache, howTo, wireHow, SB_URL, SB_KEY } from './core.js?v=202611180355';
-import { bestBets, gradeFinal } from './bets.js?v=202611180355';
+import { games, api, esc, logo, line, sgn, odds, pct, fmtTime, fmtDay, footNote, lastSync, ago, clearCache, howTo, wireHow, SB_URL, SB_KEY } from './core.js?v=202611180358';
+import { bestBets, gradeFinal } from './bets.js?v=202611180358';
+import { trackBtn } from './mybets.js?v=202611180358';
 
 const LG = { nfl: 'NFL', cfb: 'College', nba: 'NBA' };
 
@@ -78,7 +79,8 @@ async function fillBets(box) {
       <div class="disp" style="font-size:24px;margin:2px 0 4px">${esc(betLabel(b, g))}</div>
       <div class="dim" style="font-size:12.5px">${MKN[b.market]} · estimated ${pct(est, 1)} to win, break-even ${pct(b.be, 1)}</div>
       <div style="margin-top:8px;font-size:12.5px">${b.srcs.map((x) => `<div>✓ <b>${esc(x.name)}</b>${x.count > 1 ? ` (${x.count} agree)` : ''} <span class="dim">· ${esc(x.note)}</span></div>`).join('')}
-      ${b.against.map((x) => `<div class="clay">✗ ${esc(x.name)} takes the other side</div>`).join('')}</div></div>`; };
+      ${b.against.map((x) => `<div class="clay">✗ ${esc(x.name)} takes the other side</div>`).join('')}</div>
+      <div class="row" style="justify-content:space-between;margin-top:8px;font-size:12px"><span class="dim">${(() => { const p = b.market === 'teaser' ? est * est : est, k = (p * (100 / 110) - (1 - p)) / (100 / 110); return k > 0 ? `Stake: ${Math.min(3, k / 4 * 100).toFixed(1)}% of bankroll${b.market === 'teaser' ? ' per 2-leg slip' : ''} (quarter Kelly)` : ''; })()}</span>${trackBtn({ gid: b.gid, market: b.market, side: b.side, line: b.line, label: betLabel(b, g), game: `${g.data?.away?.short ?? g.away} @ ${g.data?.home?.short ?? g.home}`, start: g.start_time, tool: 'Best bets' })}</div></div>`; };
   box.innerHTML = `<h2>Best bets</h2>
     <p class="sub">Every tool’s reads on the same games, weighted by how that tool has done on games it hadn’t seen yet. Sides, totals and moneylines across NFL, college and NBA, strongest first. Tools under break-even get no weight.</p>
     <div class="grid g4" style="margin-bottom:12px">
