@@ -1,7 +1,7 @@
 // Shared NFL player-prop model for Slant (before kickoff) and At the Whistle (at each quarter break).
 // Projections use only weeks before the game, so past weeks can be checked honestly.
-import { api, blob, ncdf } from './core.js?v=202611180335';
-import { nflHist } from './hist.js?v=202611180335';
+import { api, blob, ncdf } from './core.js?v=202611180337';
+import { nflHist } from './hist.js?v=202611180337';
 
 export const STATS = {
   pass_yds: { label: 'Pass yds', cols: ['passing_yards'], box: ['pass_yds'], pos: ['QB'], yards: true },
@@ -135,7 +135,7 @@ export function project(d, { gsis, pos, stat, opp, wk, line }) {
   const dfn = (d._def ??= new Map()); if (!dfn.has(wk)) dfn.set(wk, defenseFactors(d.rows, d.posOf, wk));
   const df = dfn.get(wk)(opp, pos, stat);
   const model = f.mean * df.f;
-  const mean = line === null || line === undefined ? model : 0.35 * model + 0.65 * line; // the market line carries most of the weight
+  const mean = line === null || line === undefined ? model : 0.25 * model + 0.75 * line; // the market line carries most of the weight
   return { model, mean, form: f, def: df };
 }
 
