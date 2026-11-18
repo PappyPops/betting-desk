@@ -1,8 +1,8 @@
 // At the Whistle: NFL live player props at the end of Q1, halftime and the end of Q3. Each ticket is the projected
 // final against the line at that moment, locked at the whistle and graded on the final box score.
-import { api, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611180333';
-import { STATS, TYPE_GROUP, propData, project, atWhistle, boxVal } from './propmodel.js?v=202611180333';
-import { ncdf } from './core.js?v=202611180333';
+import { api, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611180335';
+import { STATS, TYPE_GROUP, propData, project, atWhistle, boxVal, calibrate } from './propmodel.js?v=202611180335';
+import { ncdf } from './core.js?v=202611180335';
 
 const QN = { 1: 'End Q1', 2: 'Halftime', 3: 'End Q3' };
 const NEED = { over: 0.6, under: 0.58 }; // overs need more of an edge than unders
@@ -21,6 +21,7 @@ function liveLine(snap, aid, stat) {
 
 export async function tickets() {
   const d = await propData();
+  calibrate(d);
   const snaps = await api('whistle_snaps?select=*&order=ts.asc&limit=2000', { ttl: 60_000 });
   const ids = [...new Set(snaps.map((s) => s.game_id))];
   if (!ids.length) return { list: [], snaps, G: new Map() };

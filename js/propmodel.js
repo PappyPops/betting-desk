@@ -1,7 +1,7 @@
 // Shared NFL player-prop model for Slant (before kickoff) and At the Whistle (at each quarter break).
 // Projections use only weeks before the game, so past weeks can be checked honestly.
-import { api, blob, ncdf } from './core.js?v=202611180333';
-import { nflHist } from './hist.js?v=202611180333';
+import { api, blob, ncdf } from './core.js?v=202611180335';
+import { nflHist } from './hist.js?v=202611180335';
 
 export const STATS = {
   pass_yds: { label: 'Pass yds', cols: ['passing_yards'], box: ['pass_yds'], pos: ['QB'], yards: true },
@@ -64,7 +64,11 @@ function defenseFactors(rows, posOf, wk) {
 
 // recent form: last four games weighted 4-3-2-1, blended with the season average
 function form(list, wk, s) {
-  const g = list.filter((r) => r.week < wk);
+  let g = list.filter((r) => r.week < wk);
+  if (g.length >= 4) { // drop games he barely played (under a third of his usual volume), e.g. left hurt
+    const vol = (r) => r.attempts + r.carries + r.targets; const med = [...g].map(vol).sort((a, b) => a - b)[Math.floor(g.length / 2)];
+    g = g.filter((r) => vol(r) >= med / 3);
+  }
   if (!g.length) return null;
   const last = g.slice(-4).reverse(); const w = [4, 3, 2, 1];
   const lw = last.reduce((a, r, i) => a + val(r, s) * w[i], 0) / w.slice(0, last.length).reduce((a, x) => a + x, 0);
@@ -72,9 +76,12 @@ function form(list, wk, s) {
   return { mean: 0.6 * lw + 0.4 * sa, last: last.map((r) => val(r, s)), games: g.length };
 }
 
-// spread of outcomes around a projection, by stat
+// spread of outcomes around a projection, by stat. Once calibrate() has run, this is measured from how far the
+// model's own projections missed in earlier weeks this season (a straight line fit of miss size against projection).
+let CAL = null;
 export function sdFor(s, mean) {
   const m = Math.max(0, mean);
+  if (CAL?.[s]) return Math.max(CAL[s].min, CAL[s].a + CAL[s].b * m);
   switch (s) {
     case 'pass_yds': case 'pass_rush_yds': return 0.22 * m + 30;
     case 'rush_yds': return 0.45 * m + 8;
@@ -92,14 +99,43 @@ export function probOver(s, mean, line, sd = sdFor(s, mean)) {
   return 1 - ncdf((line - mean) / Math.max(0.5, sd));
 }
 
+export function calibrate(d) {
+  if (CAL) return CAL;
+  const maxWk = Math.max(...d.rows.map((r) => r.week));
+  const res = Object.fromEntries(Object.keys(STATS).map((k) => [k, []]));
+  for (const [pid, list] of d.byPid) {
+    const pos = d.posOf.get(pid);
+    for (const r of list) {
+      if (r.week < 5 || r.week > maxWk) continue;
+      for (const k of Object.keys(STATS)) {
+        if (!STATS[k].pos.includes(pos) || STATS[k].count) continue;
+        const pr = project(d, { gsis: pid, pos, stat: k, opp: r.opp, wk: r.week, line: null });
+        if (!pr || pr.model < (STATS[k].yards ? 10 : 1.5)) continue;
+        res[k].push([pr.model, STATS[k].cols.reduce((a, c) => a + (r[c] || 0), 0)]);
+      }
+    }
+  }
+  CAL = {};
+  for (const [k, pts] of Object.entries(res)) {
+    if (pts.length < 60) continue;
+    pts.sort((a, b) => a[0] - b[0]);
+    const bins = 5, xs = [], ys = [];
+    for (let i = 0; i < bins; i++) { const part = pts.slice(Math.floor(i * pts.length / bins), Math.floor((i + 1) * pts.length / bins)); xs.push(part.reduce((a, p) => a + p[0], 0) / part.length); ys.push(Math.sqrt(part.reduce((a, p) => a + (p[1] - p[0]) ** 2, 0) / part.length)); }
+    const mx = xs.reduce((a, x) => a + x, 0) / bins, my = ys.reduce((a, y) => a + y, 0) / bins;
+    const b = xs.reduce((a, x, i) => a + (x - mx) * (ys[i] - my), 0) / Math.max(1e-9, xs.reduce((a, x) => a + (x - mx) ** 2, 0));
+    CAL[k] = { a: my - b * mx, b: Math.max(0, b), min: Math.min(...ys) * 0.8, n: pts.length };
+  }
+  return CAL;
+}
+
 // pregame projection for one player prop, using only weeks before the game
 export function project(d, { gsis, pos, stat, opp, wk, line }) {
   const list = d.byPid.get(gsis) || [];
-  const f = form(list, wk, stat); if (!f || f.games < 2) return null;
+  const f = form(list, wk, stat); if (!f || f.games < 3) return null;
   const dfn = (d._def ??= new Map()); if (!dfn.has(wk)) dfn.set(wk, defenseFactors(d.rows, d.posOf, wk));
   const df = dfn.get(wk)(opp, pos, stat);
   const model = f.mean * df.f;
-  const mean = line === null || line === undefined ? model : 0.5 * model + 0.5 * line; // the market line is half the prior
+  const mean = line === null || line === undefined ? model : 0.35 * model + 0.65 * line; // the market line carries most of the weight
   return { model, mean, form: f, def: df };
 }
 
