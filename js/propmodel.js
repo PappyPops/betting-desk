@@ -1,7 +1,7 @@
 // Shared NFL player-prop model for Slant (before kickoff) and At the Whistle (at each quarter break).
 // Projections use only weeks before the game, so past weeks can be checked honestly.
-import { api, blob, ncdf } from './core.js?v=202611180337';
-import { nflHist } from './hist.js?v=202611180337';
+import { api, blob, ncdf } from './core.js?v=202611180352';
+import { nflHist } from './hist.js?v=202611180352';
 
 export const STATS = {
   pass_yds: { label: 'Pass yds', cols: ['passing_yards'], box: ['pass_yds'], pos: ['QB'], yards: true },
@@ -129,14 +129,81 @@ export function calibrate(d) {
 }
 
 // pregame projection for one player prop, using only weeks before the game
-export function project(d, { gsis, pos, stat, opp, wk, line }) {
+const REC_STATS = new Set(['rec', 'rec_yds']), RUSH_STATS = new Set(['rush_att', 'rush_yds']);
+const PASS_STATS = new Set(['pass_yds', 'pass_cmp', 'pass_att', 'pass_rush_yds']);
+const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+
+// the situation around one game for one team: who's out, who's throwing, weather, and how the game should go
+// ctx = { team, out: [{gsis, name, pos}], qb: {gsis, name, passYds, passAtt} | null, weather, roof, spread, total }
+function situational(d, { gsis, pos, stat, wk, ctx }) {
+  const notes = []; let f = 1;
+  if (!ctx) return { f, notes };
+  const mine = (d.byPid.get(gsis) || []).filter((r) => r.week < wk && r.team === ctx.team).slice(-4);
+  const weeks = new Set(mine.map((r) => r.week));
+  const teamRows = d.rows.filter((r) => r.team === ctx.team && weeks.has(r.week));
+  // 1. a teammate is out: his share of targets (or carries) moves to the players left
+  const shareOf = (key, who) => { const tot = teamRows.reduce((a, r) => a + (r[key] || 0), 0); return tot ? teamRows.filter((r) => r.pid === who).reduce((a, r) => a + (r[key] || 0), 0) / tot : 0; };
+  const volKey = REC_STATS.has(stat) ? 'targets' : RUSH_STATS.has(stat) ? 'carries' : stat === 'rush_rec_yds' ? 'targets' : null;
+  if (volKey && ctx.out?.length && weeks.size) {
+    const gone = ctx.out.filter((o) => o.gsis !== gsis && teamRows.some((r) => r.pid === o.gsis && (r[volKey] || 0) > 0));
+    const missing = gone.reduce((a, o) => a + shareOf(volKey, o.gsis), 0);
+    const mineShare = shareOf(volKey, gsis);
+    if (missing > 0.05 && mineShare > 0) {
+      const boost = clamp(1 + missing / Math.max(0.2, 1 - missing), 1, 1.6);
+      f *= boost;
+      notes.push(`${gone.map((o) => `${o.name} (${o.pos})`).join(', ')} out: ${(missing * 100).toFixed(0)}% of the ${volKey} are up for grabs, about ${sgnPct(boost - 1)} for him.`);
+    }
+  }
+  // 2. who's throwing: the QB's own passing line against what this offense threw for in his recent games
+  if ((REC_STATS.has(stat) || stat === 'rush_rec_yds') && ctx.qb?.passYds) {
+    const qbRows = teamRows.filter((r) => d.posOf.get(r.pid) === 'QB');
+    const perWk = weeks.size ? qbRows.reduce((a, r) => a + r.passing_yards, 0) / weeks.size : null;
+    if (perWk && perWk > 80) {
+      const ratio = ctx.qb.passYds / perWk;
+      const adj = clamp(1 + 0.6 * (ratio - 1) * (stat === 'rush_rec_yds' ? 0.5 : 1), 0.75, 1.35);
+      const usual = [...qbRows.reduce((m, r) => m.set(r.pid, (m.get(r.pid) || 0) + r.attempts), new Map())].sort((x, y) => y[1] - x[1])[0]?.[0];
+      const change = usual && usual !== ctx.qb.gsis;
+      if (Math.abs(adj - 1) >= 0.03) { f *= adj; notes.push(`${change ? `QB change: ${ctx.qb.name} starts. ` : ''}His passing line is ${ctx.qb.passYds} vs the ${perWk.toFixed(0)} a game this offense threw for lately: ${sgnPct(adj - 1)} for receivers.`); }
+    }
+  }
+  // 3. weather (outdoor stadiums only)
+  const w = ctx.weather;
+  if (w && ctx.roof !== 'dome' && ctx.roof !== 'closed') {
+    const gust = Number(w.gust) || 0, rain = Number(w.precip) || 0, temp = Number(w.temp);
+    let wx = 1; const why = [];
+    if (gust >= 35) { wx = 0.85; why.push(`gusts to ${gust} mph`); } else if (gust >= 25) { wx = 0.92; why.push(`gusts to ${gust} mph`); }
+    if (rain >= 60) { wx *= 0.95; why.push(`${rain}% chance of rain`); }
+    if (Number.isFinite(temp) && temp <= 25) { wx *= 0.96; why.push(`${temp}°F`); }
+    if (wx < 1) {
+      const isAir = PASS_STATS.has(stat) || REC_STATS.has(stat), isGround = RUSH_STATS.has(stat);
+      const adj = isAir ? wx : isGround ? 1 + (1 - wx) * 0.5 : 1;
+      if (adj !== 1) { f *= adj; notes.push(`Weather: ${why.join(', ')}. ${isAir ? 'Passing' : 'Running'} ${sgnPct(adj - 1)}.`); }
+    }
+  }
+  // 4. game script from the spread: favorites run more late, underdogs throw more
+  if (Number.isFinite(ctx.spread)) {
+    const fav = -ctx.spread; // points this team is favored by
+    let adj = 1;
+    if (RUSH_STATS.has(stat)) adj = clamp(1 + 0.012 * fav, 0.88, 1.12);
+    else if (PASS_STATS.has(stat) || REC_STATS.has(stat)) adj = clamp(1 - 0.005 * fav, 0.94, 1.06);
+    if (Math.abs(adj - 1) >= 0.03) { f *= adj; notes.push(`${fav > 0 ? `Favored by ${fav}` : `${-fav}-point underdog`}: ${sgnPct(adj - 1)} ${RUSH_STATS.has(stat) ? 'on the ground' : 'through the air'} from game script.`); }
+  }
+  return { f: clamp(f, 0.6, 1.8), notes };
+}
+const sgnPct = (x) => `${x >= 0 ? '+' : '−'}${Math.abs(x * 100).toFixed(0)}%`;
+
+// pregame projection for one player prop, using only weeks before the game
+export function project(d, { gsis, pos, stat, opp, wk, line, ctx = null }) {
   const list = d.byPid.get(gsis) || [];
   const f = form(list, wk, stat); if (!f || f.games < 3) return null;
   const dfn = (d._def ??= new Map()); if (!dfn.has(wk)) dfn.set(wk, defenseFactors(d.rows, d.posOf, wk));
   const df = dfn.get(wk)(opp, pos, stat);
-  const model = f.mean * df.f;
-  const mean = line === null || line === undefined ? model : 0.25 * model + 0.75 * line; // the market line carries most of the weight
-  return { model, mean, form: f, def: df };
+  const sit = situational(d, { gsis, pos, stat, wk, ctx });
+  const model = f.mean * df.f * sit.f;
+  // the market line carries most of the weight; when the situation changed a lot, the model earns a little more
+  const wModel = Math.abs(sit.f - 1) >= 0.08 ? 0.35 : 0.25;
+  const mean = line === null || line === undefined ? model : wModel * model + (1 - wModel) * line;
+  return { model, mean, form: f, def: df, sit, wModel };
 }
 
 // at a quarter break: projected final from the stat so far, the prior, pace, game script and the clock

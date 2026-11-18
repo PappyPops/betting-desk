@@ -32,6 +32,13 @@ Deno.serve(async () => {
         if (page >= (d.pageCount ?? 1)) break;
       }
       if (rows.size) { const { error } = await sb.from('props').upsert([...rows.values()]); if (error) out.errors.push(error.message); }
+      // injuries and the weather forecast for the game (ESPN game summary)
+      try {
+        const sum = await j(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${g.id}`);
+        const injuries = (sum.injuries ?? []).flatMap((t: any) => (t.injuries ?? []).map((x: any) => ({ id: String(x.athlete?.id ?? ''), name: x.athlete?.displayName, pos: x.athlete?.position?.abbreviation, team: t.team?.abbreviation, status: x.status, detail: x.details?.type ?? null })));
+        const w = sum.gameInfo?.weather ?? null;
+        await sb.from('game_context').upsert({ game_id: g.id, injuries, weather: w ? { temp: w.temperature ?? null, gust: w.gust ?? null, precip: w.precipitation ?? null, cond: w.conditionId ?? null } : null, venue: sum.gameInfo?.venue?.fullName ?? null, updated_at: now.toISOString() });
+      } catch (e) { out.errors.push('ctx ' + String(e).slice(0, 60)); }
       out.games++; out.props += rows.size;
     } catch (e) { out.errors.push(String(e).slice(0, 120)); }
   }
