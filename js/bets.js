@@ -1,10 +1,10 @@
 // Best bets: every tool's current reads on the same games, weighted by how each tool has actually done on games
 // it hadn't seen yet. A source with no record, or a record under break-even, gets no weight.
-import { api, games } from './core.js?v=202611191936';
-import { matrixData } from './matrix.js?v=202611191936';
-import { RESEARCH, BREAK_EVEN } from './research.js?v=202611191936';
-import { CUTS, grade as cutGrade } from './linelife.js?v=202611191936';
-import { flagNow, loadFlags, gradeFlags, historyNote } from './moves.js?v=202611191936';
+import { api, games } from './core.js?v=202611192205';
+import { matrixData } from './matrix.js?v=202611192205';
+import { RESEARCH, BREAK_EVEN } from './research.js?v=202611192205';
+import { CUTS, grade as cutGrade } from './linelife.js?v=202611192205';
+import { flagNow, loadFlags, gradeFlags, historyNote } from './moves.js?v=202611192205';
 
 const BE = 110 / 210;
 const K = 150; // shrink each record toward break-even as if it had 150 more games at exactly break-even
