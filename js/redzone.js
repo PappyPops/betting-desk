@@ -1,6 +1,6 @@
-import { games, blob, api, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, copy } from './core.js?v=202611192336';
-import { nflHist } from './hist.js?v=202611192336';
-import { trackBtn } from './mybets.js?v=202611192336';
+import { games, blob, api, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, copy } from './core.js?v=202611192337';
+import { nflHist } from './hist.js?v=202611192337';
+import { trackBtn } from './mybets.js?v=202611192337';
 
 const GROUP = (pos) => pos === 'QB' ? 'QB' : pos === 'TE' ? 'TE' : pos === 'WR' ? 'WR' : 'RB';
 const K_RUSH = 60, K_REC = 50, K_OPP = 8;
@@ -37,11 +37,12 @@ function buildModel(rows, players, histGames, wk) {
   return { byP, rate, oppAllowed, oppGames, allowAvg, teamLast, pts, def, defRank: { rush: rankOf('rush'), pass: rankOf('pass') }, nDef: def.size };
 }
 
-function lambda(m, players, pid, opp, implied, boost = null) {
+function lambda(m, players, pid, opp, implied, boost = null, back = null) {
   const hist = (m.byP.get(pid) ?? []).sort((a, b) => b.week - a.week);
   if (!hist.length) return null;
   const team = hist[0].team;
-  if (hist[0].week < (m.teamLast.get(team) ?? 0)) return null; // didn't play in his team's last game
+  // didn't play in his team's last game: out unless he's back this week (still on the roster, not on the injury report)
+  if (hist[0].week < (m.teamLast.get(team) ?? 0) && !(back && back.has(pid) && hist.length >= 3 && (m.teamLast.get(team) - hist[0].week) <= 5)) return null;
   const g = GROUP(players[pid]?.[1]);
   const w = [4, 3, 2, 1]; let wc = 0, wt = 0, ws = 0;
   hist.slice(0, 4).forEach((r, i) => { wc += r.carries * w[i]; wt += r.targets * w[i]; ws += w[i]; });
@@ -78,10 +79,11 @@ export async function render(el) {
   // injury report (ESPN, saved with the prop lines) and ESPN id -> nflverse id
   const [ctxRows, ath] = await Promise.all([
     api('game_context?select=game_id,injuries&limit=500', { ttl: 600_000 }).catch(() => []),
-    (async () => { const out = []; for (let off = 0; off < 8000; off += 1000) { const p = await api(`athletes?select=id,gsis&gsis=not.is.null&offset=${off}&limit=1000`, { ttl: 3600_000 }).catch(() => []); out.push(...p); if (p.length < 1000) break; } return out; })(),
+    (async () => { const out = []; for (let off = 0; off < 8000; off += 1000) { const p = await api(`athletes?select=id,gsis,team&gsis=not.is.null&offset=${off}&limit=1000`, { ttl: 3600_000 }).catch(() => []); out.push(...p); if (p.length < 1000) break; } return out; })(),
   ]);
   const gsisOf = new Map(ath.map((a) => [String(a.id), a.gsis]));
   const espnOf = new Map(ath.map((a) => [a.gsis, String(a.id)]));
+  const rosterTeam = new Map(ath.map((a) => [a.gsis, a.team]));
   const injBy = new Map(ctxRows.map((c) => [String(c.game_id), (c.injuries || []).map((x) => ({ ...x, gsis: gsisOf.get(String(x.id)) })).filter((x) => x.gsis)]));
   const OUT = /^(out|doubtful|injured reserve|ir|suspension|pup)/i;
 
@@ -140,7 +142,9 @@ export async function render(el) {
     const status = new Map(inj.map((x) => [x.gsis, x]));
     for (const [team, opp, implied, espnTeam] of sides) {
       const base = [];
-      for (const [pid] of m.byP) { const L = lambda(m, players, pid, opp, implied); if (L && L.team === team) base.push({ pid, L }); }
+      // players back from a missed stretch: listed on this team and not on the injury report
+      const back = new Set([...m.byP.keys()].filter((pid) => rosterTeam.get(pid) === team && !status.has(pid)));
+      for (const [pid] of m.byP) { const L = lambda(m, players, pid, opp, implied, null, back); if (L && L.team === team) base.push({ pid, L: { ...L, returning: (m.byP.get(pid) ?? []).reduce((a2, r) => Math.max(a2, r.week), 0) < (m.teamLast.get(team) ?? 0) } }); }
       // players ruled out: their expected carries and targets move to healthy teammates at the same position
       const outs = base.filter((x) => OUT.test(status.get(x.pid)?.status || ''));
       const healthy = base.filter((x) => !OUT.test(status.get(x.pid)?.status || ''));
@@ -151,7 +155,7 @@ export async function render(el) {
         if (f && (f.c + f.t) >= 2) {
           const same = healthy.filter((y) => y.L.g === L.g), totC = same.reduce((a, y) => a + y.L.eC, 0) || 1, totT = same.reduce((a, y) => a + y.L.eT, 0) || 1;
           const add = { c: f.c * 0.7 * (L.eC / totC), t: f.t * 0.7 * (L.eT / totT) }; // 70%: some of the work goes to players not on this list
-          if (add.c + add.t >= 0.5) { L = lambda(m, players, x.pid, opp, implied, add); boostNote = { names: f.who, add: add.c + add.t }; }
+          if (add.c + add.t >= 0.5) { L = { ...lambda(m, players, x.pid, opp, implied, add, new Set([x.pid])), returning: x.L.returning }; boostNote = { names: f.who, add: add.c + add.t }; }
         }
         list.push({ pid: x.pid, name: players[x.pid][0], pos: players[x.pid][1], shot: players[x.pid][2], L, p: calP(L.g, toP(L.lam)), implied, espnTeam, opp, team, status: status.get(x.pid)?.status ?? null, boostNote, opImp: null });
       }
@@ -172,7 +176,7 @@ export async function render(el) {
   const byKey = new Map(); for (const c of cards) for (const x of c.all) byKey.set(`${c.g.id}|${x.pid}`, { x, c });
   const ord = (n) => n + (n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th');
   const calNote = (g) => { const c = cal[g]; if (!c.n) return ''; const d = c.act / c.n - c.pred / c.n; return Math.abs(d) < 0.015 ? '' : d < 0 ? `${g} forecasts have run high this season, so the chance is marked down.` : `${g} forecasts have run low this season, so the chance is marked up.`; };
-  const conf = (x) => x.L.gp >= 6 && !x.boostNote && !x.status ? 'High' : x.L.gp < 3 || x.status ? 'Low' : 'Medium';
+  const conf = (x) => x.L.gp >= 6 && !x.boostNote && !x.status && !x.L.returning ? 'High' : x.L.gp < 3 || x.status ? 'Low' : 'Medium';
   const bars = (x) => {
     const touches = x.L.eC + x.L.eT;
     const fin = x.L.g === 'QB' ? x.L.rRush / (m.rate.QB.rush || 0.03) : (x.L.eC * x.L.rRush + x.L.eT * x.L.rRec) / Math.max(0.1, x.L.eC * m.rate[x.L.g].rush + x.L.eT * m.rate[x.L.g].rec);
@@ -188,7 +192,7 @@ export async function render(el) {
     const matchup = d ? `${oppAbbr.short}: ${d.rush.toFixed(1)} rush TD/g allowed (${ord(m.defRank.rush.get(x.opp))}-most of ${m.nDef}), ${d.pass.toFixed(1)} pass TD/g (${ord(m.defRank.pass.get(x.opp))}-most). Against ${pos}s specifically, this is ${ease}.` : 'Not enough games to rate this defense yet.';
     const fav = c.g.spread_home === null ? '' : (() => { const sp = Number(c.g.spread_home) * (c.g.data.home.abbr === team ? 1 : -1); return sp < 0 ? ` ${x.espnTeam.short} are favored by ${-sp}.` : sp > 0 ? ` ${x.espnTeam.short} are getting ${sp}.` : ' Pick’em.'; })();
     const recent = x.L.recExp > 0.3 ? (x.L.recTD < x.L.recExp * 0.6 ? ' Recent weeks have been quieter than his role suggests.' : x.L.recTD > x.L.recExp * 1.6 ? ` Scored ${x.L.recTD} in his last three, ahead of what his role suggests.` : '') : '';
-    const spot = `${x.boostNote ? `${x.boostNote.names.join(' and ')} ${x.boostNote.names.length > 1 ? 'are' : 'is'} out, so about ${x.boostNote.add.toFixed(1)} more touches come his way. ` : ''}${x.implied ? `Implied team total ${x.implied.toFixed(1)}.` : ''}${fav}${recent} ${calNote(pos)}`.trim();
+    const spot = `${x.L.returning ? 'Back after missing recent games; his role is projected from before he left, so treat it as a guess. ' : ''}${x.boostNote ? `${x.boostNote.names.join(' and ')} ${x.boostNote.names.length > 1 ? 'are' : 'is'} out, so about ${x.boostNote.add.toFixed(1)} more touches come his way. ` : ''}${x.implied ? `Implied team total ${x.implied.toFixed(1)}.` : ''}${fav}${recent} ${calNote(pos)}`.trim();
     const cf = conf(x);
     return `<div class="rz-ov" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px" data-close>
       <div class="card" style="max-width:640px;width:100%;margin:auto;padding:18px" onclick="event.stopPropagation()">
@@ -207,7 +211,7 @@ export async function render(el) {
   }
   const pCard = (x) => `<div class="row" data-rz="${esc(`${x._gid}|${x.pid}`)}" style="justify-content:space-between;padding:7px 0;border-top:1px solid var(--line);cursor:pointer" title="Tap for the breakdown">
     <span class="team">${x.shot ? `<img class="logo" style="width:30px;height:30px;border-radius:50%;object-fit:cover;background:var(--surface2)" src="${esc(x.shot)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}<span><b>${esc(x.name)}</b> <span class="dim">${esc(x.pos)} · ${esc(x.espnTeam.abbr)}</span>
-      ${x.status ? ` <span class="chip clay" style="font-size:10px">${esc(x.status)}</span>` : ''}${x.boostNote ? ' <span class="chip gold" style="font-size:10px">more work</span>' : ''}<div class="dim" style="font-size:12px">${x.L.eC >= 1 ? `${x.L.eC.toFixed(1)} carries` : ''}${x.L.eC >= 1 && x.L.eT >= 1 ? ' · ' : ''}${x.L.eT >= 1 ? `${x.L.eT.toFixed(1)} targets` : ''} · ${x.L.sRT + x.L.sCT} TD in ${x.L.gp} · last 4: ${x.L.last.join(', ')}</div></span></span>
+      ${x.status ? ` <span class="chip clay" style="font-size:10px">${esc(x.status)}</span>` : ''}${x.boostNote ? ' <span class="chip gold" style="font-size:10px">more work</span>' : ''}${x.L.returning ? ' <span class="chip" style="font-size:10px">back</span>' : ''}<div class="dim" style="font-size:12px">${x.L.eC >= 1 ? `${x.L.eC.toFixed(1)} carries` : ''}${x.L.eC >= 1 && x.L.eT >= 1 ? ' · ' : ''}${x.L.eT >= 1 ? `${x.L.eT.toFixed(1)} targets` : ''} · ${x.L.sRT + x.L.sCT} TD in ${x.L.gp} · last 4: ${x.L.last.join(', ')}</div></span></span>
     <span style="text-align:right"><b class="disp num" style="font-size:22px">${pct(x.p)}</b><div class="dim" style="font-size:11px">${x.L.fOpp > 1.1 ? 'soft defense' : x.L.fOpp < 0.9 ? 'tough defense' : ''}${x.L.fTeam > 1.1 ? ' · high total' : x.L.fTeam < 0.9 ? ' · low total' : ''}</div></span></div>`;
 
   function draw() {
