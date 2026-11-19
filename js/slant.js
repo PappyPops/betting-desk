@@ -1,7 +1,7 @@
 // Slant: NFL player props before kickoff, ranked by expected value at −110, with every pick graded after the game.
-import { api, games, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611191935';
-import { STATS, TYPE_GROUP, propData, project, probOver, boxVal, calibrate } from './propmodel.js?v=202611191935';
-import { trackBtn } from './mybets.js?v=202611191935';
+import { api, games, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611191936';
+import { STATS, TYPE_GROUP, propData, project, probOver, boxVal, calibrate } from './propmodel.js?v=202611191936';
+import { trackBtn } from './mybets.js?v=202611191936';
 
 const PAY = 100 / 110;
 export const MIN_EV = 0.06; // a pick needs 6%+ expected value at −110 (about 55.5% to win)

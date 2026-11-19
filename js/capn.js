@@ -1,4 +1,4 @@
-import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611191935';
+import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611191936';
 
 const LGS = [['nfl', 'NFL'], ['cfb', 'College'], ['nba', 'NBA']];
 const SRC = { action: 'Action', docs: 'Doc’s', espn: 'ESPN', cbs: 'CBS', pickswise: 'Pickswise', covers: 'Covers', dimers: 'Dimers', espnmodel: 'ESPN' };
@@ -70,7 +70,7 @@ export async function render(el) {
 
     const pickRow = (k) => { const e = experts.get(k.expert_id); const u = e?.record?.units_net;
       return `<div class="row" style="justify-content:space-between;padding:5px 0;border-top:1px solid var(--line);font-size:13px">
-        <span><span class="chip" style="font-size:10.5px;padding:0 6px">${SRC[k.source] ?? k.source}${MODEL.has(k.source) ? ' model' : ''}</span> <b>${esc(e?.name ?? 'Handicapper')}</b> <span class="dim">${expRec(e)}${u !== null && u !== undefined && e?.record?.count ? ` · ${u >= 0 ? '+' : ''}${Number(u).toFixed(1)}u` : ''}</span></span>
+        <span><span class="chip" style="font-size:10.5px;padding:0 6px">${MODEL.has(k.source) ? 'Model' : SRC[k.source] ?? k.source}</span> <b>${esc(e?.name ?? 'Handicapper')}</b> <span class="dim">${expRec(e)}${u !== null && u !== undefined && e?.record?.count ? ` · ${u >= 0 ? '+' : ''}${Number(u).toFixed(1)}u` : ''}</span></span>
         <span class="num">${esc(k.play)}${k.odds && k.source === 'action' ? ` <span class="dim">${odds(k.odds)}</span>` : ''}${k.units ? ` <span class="dim">${k.units}u</span>` : ''}</span></div>`; };
     const panelLine = (gid, g) => { const p = panel.get(gid); if (!p) return ''; const n = p.home + p.away; const lead = p.home >= p.away ? 'home' : 'away';
       return `<div class="dim" style="font-size:12.5px;margin-top:8px">ESPN panel: <b class="muted">${p[lead]} of ${n}</b> pick ${esc(g.data[lead].short)} to win</div>`; };
