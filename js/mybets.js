@@ -1,12 +1,12 @@
 // My Bets: track the bets you actually place from any tool, graded automatically, with units and ROI by tool.
 // Saved in this browser; Export and Import move them to another phone or computer.
-import { api, blob, esc, fmtDay, fmtTime, pct, odds, store, toast, footNote, seg, onSeg } from './core.js?v=202611192226';
+import { api, blob, esc, fmtDay, fmtTime, pct, odds, store, toast, footNote, seg, onSeg } from './core.js?v=202611192336';
 
 const KEY = 'mybets';
 export const getBets = () => store.get(KEY, []);
 const save = (list) => store.set(KEY, list);
-const PROP_LABEL = { pass_yds: 'Pass yds', pass_cmp: 'Completions', pass_att: 'Pass attempts', pass_td: 'Pass TD', rush_att: 'Carries', rush_yds: 'Rush yds', rec: 'Receptions', rec_yds: 'Rec yds', pass_rush_yds: 'Pass + rush yds', rush_rec_yds: 'Rush + rec yds' };
-const boxStat = (b, s) => { if (!b) return 0; const m = { pass_rush_yds: ['pass_yds', 'rush_yds'], rush_rec_yds: ['rush_yds', 'rec_yds'] }; return (m[s] || [s]).reduce((a, k) => a + (b[k] || 0), 0); };
+const PROP_LABEL = { pass_yds: 'Pass yds', pass_cmp: 'Completions', pass_att: 'Pass attempts', pass_td: 'Pass TD', rush_att: 'Carries', rush_yds: 'Rush yds', rec: 'Receptions', rec_yds: 'Rec yds', pass_rush_yds: 'Pass + rush yds', rush_rec_yds: 'Rush + rec yds', td: 'Anytime TD' };
+const boxStat = (b, s) => { if (!b) return 0; const m = { pass_rush_yds: ['pass_yds', 'rush_yds'], rush_rec_yds: ['rush_yds', 'rec_yds'], td: ['rush_td', 'rec_td'] }; return (m[s] || [s]).reduce((a, k) => a + (b[k] || 0), 0); };
 
 // a button any tool can drop on a card: <button data-track='{...}'>
 export function trackBtn(bet) {
@@ -74,7 +74,7 @@ export async function render(el) {
     const sum = (l) => { const w = l.filter((b) => b.result === 'W').length, ls = l.filter((b) => b.result === 'L').length, p = l.filter((b) => b.result === 'P').length; const u = l.reduce((a, b) => a + won(b), 0), risk = l.reduce((a, b) => a + (b.result === 'P' ? 0 : b.stake), 0); return { w, l: ls, p, u, roi: risk ? u / risk : null }; };
     const all = sum(done);
     const tools = [...new Set(done.map((b) => b.tool))];
-    const label = (b) => b.market === 'prop' ? `${b.name} ${b.side === 'over' ? 'Over' : 'Under'} ${b.line} ${PROP_LABEL[b.stat] ?? b.stat}${b.q ? ` (${b.q})` : ''}` : b.label;
+    const label = (b) => b.market === 'prop' && b.stat === 'td' ? `${b.name} anytime TD` : b.market === 'prop' ? `${b.name} ${b.side === 'over' ? 'Over' : 'Under'} ${b.line} ${PROP_LABEL[b.stat] ?? b.stat}${b.q ? ` (${b.q})` : ''}` : b.label;
     const row = (b, i) => `<tr data-i="${list.indexOf(b)}"><td><b>${esc(label(b))}</b><div class="dim" style="font-size:12px">${esc(b.game ?? '')}${b.start ? ` · ${esc(fmtDay(b.start))} ${esc(fmtTime(b.start))}` : ''} · ${esc(b.tool)}</div></td>
       <td class="r"><input class="num" data-f="odds" value="${b.odds}" style="width:62px;background:transparent;color:inherit;border:1px solid var(--line2);border-radius:6px;padding:2px 4px;text-align:right"></td>
       <td class="r"><input class="num" data-f="stake" value="${b.stake}" style="width:46px;background:transparent;color:inherit;border:1px solid var(--line2);border-radius:6px;padding:2px 4px;text-align:right"></td>

@@ -1,5 +1,6 @@
-import { games, blob, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, copy } from './core.js?v=202611192226';
-import { nflHist } from './hist.js?v=202611192226';
+import { games, blob, api, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, copy } from './core.js?v=202611192336';
+import { nflHist } from './hist.js?v=202611192336';
+import { trackBtn } from './mybets.js?v=202611192336';
 
 const GROUP = (pos) => pos === 'QB' ? 'QB' : pos === 'TE' ? 'TE' : pos === 'WR' ? 'WR' : 'RB';
 const K_RUSH = 60, K_REC = 50, K_OPP = 8;
@@ -27,10 +28,16 @@ function buildModel(rows, players, histGames, wk) {
   const pts = new Map();
   for (const h of histGames) { if (!h.done || h.season !== 2026 || h.week >= wk || h.game_type !== 'REG') continue;
     for (const [t, p] of [[h.home_team, h.home_score], [h.away_team, h.away_score]]) { const a = pts.get(t) ?? [0, 0]; a[0] += p; a[1]++; pts.set(t, a); } }
-  return { byP, rate, oppAllowed, oppGames, allowAvg, teamLast, pts };
+  // touchdowns each defense has allowed per game, on the ground and through the air (all positions)
+  const tdAllowed = new Map();
+  for (const r of prior) { const a = tdAllowed.get(r.opp) ?? { rush: 0, rec: 0 }; a.rush += r.rushing_tds; a.rec += r.receiving_tds; tdAllowed.set(r.opp, a); }
+  const def = new Map();
+  for (const [t, a] of tdAllowed) { const n = oppGames.get(t)?.size || 1; def.set(t, { rush: a.rush / n, pass: a.rec / n }); }
+  const rankOf = (key) => { const l = [...def.entries()].sort((x, y) => y[1][key] - x[1][key]); return new Map(l.map(([t], i) => [t, i + 1])); };
+  return { byP, rate, oppAllowed, oppGames, allowAvg, teamLast, pts, def, defRank: { rush: rankOf('rush'), pass: rankOf('pass') }, nDef: def.size };
 }
 
-function lambda(m, players, pid, opp, implied) {
+function lambda(m, players, pid, opp, implied, boost = null) {
   const hist = (m.byP.get(pid) ?? []).sort((a, b) => b.week - a.week);
   if (!hist.length) return null;
   const team = hist[0].team;
@@ -38,7 +45,8 @@ function lambda(m, players, pid, opp, implied) {
   const g = GROUP(players[pid]?.[1]);
   const w = [4, 3, 2, 1]; let wc = 0, wt = 0, ws = 0;
   hist.slice(0, 4).forEach((r, i) => { wc += r.carries * w[i]; wt += r.targets * w[i]; ws += w[i]; });
-  const eC = wc / ws, eT = wt / ws;
+  let eC = wc / ws, eT = wt / ws;
+  if (boost) { eC += boost.c || 0; eT += boost.t || 0; }
   const sC = hist.reduce((a, r) => a + r.carries, 0), sT = hist.reduce((a, r) => a + r.targets, 0);
   const sRT = hist.reduce((a, r) => a + r.rushing_tds, 0), sCT = hist.reduce((a, r) => a + r.receiving_tds, 0);
   const rRush = (sRT + K_RUSH * m.rate[g].rush) / (sC + K_RUSH);
@@ -49,7 +57,10 @@ function lambda(m, players, pid, opp, implied) {
   const og = m.oppGames.get(opp)?.size ?? 0, oa = m.oppAllowed.get(opp + '|' + g) ?? 0;
   const fOpp = m.allowAvg[g] ? ((oa + K_OPP * m.allowAvg[g]) / (og + K_OPP)) / m.allowAvg[g] : 1;
   lam *= fTeam * fOpp;
-  return { lam, g, team, eC, eT, rRush, rRec, fTeam, fOpp, sRT, sCT, gp: hist.length, last: hist.slice(0, 4).map((r) => r.rushing_tds + (g === 'QB' ? 0 : r.receiving_tds)) };
+  const recent = hist.slice(0, 3), recTD = recent.reduce((a, r) => a + r.rushing_tds + (g === 'QB' ? 0 : r.receiving_tds), 0);
+  const recExp = recent.reduce((a, r) => a + r.carries * rRush + r.targets * rRec, 0);
+  return { lam, g, team, eC, eT, rRush, rRec, fTeam, fOpp, sRT, sCT, gp: hist.length, recTD, recExp, scoredGames: hist.filter((r) => r.rushing_tds + (g === 'QB' ? 0 : r.receiving_tds) > 0).length,
+    last: hist.slice(0, 4).map((r) => r.rushing_tds + (g === 'QB' ? 0 : r.receiving_tds)), boosted: !!boost };
 }
 const toP = (lam, cal = 1) => 1 - Math.exp(-lam * cal);
 
@@ -64,6 +75,15 @@ export async function render(el) {
   const histGames = h.games;
   const now = new Date();
   const live = await games({ league: 'nfl', from: new Date(now.getTime() - 5 * 3600e3).toISOString(), to: new Date(now.getTime() + 9 * 86400e3).toISOString() });
+  // injury report (ESPN, saved with the prop lines) and ESPN id -> nflverse id
+  const [ctxRows, ath] = await Promise.all([
+    api('game_context?select=game_id,injuries&limit=500', { ttl: 600_000 }).catch(() => []),
+    (async () => { const out = []; for (let off = 0; off < 8000; off += 1000) { const p = await api(`athletes?select=id,gsis&gsis=not.is.null&offset=${off}&limit=1000`, { ttl: 3600_000 }).catch(() => []); out.push(...p); if (p.length < 1000) break; } return out; })(),
+  ]);
+  const gsisOf = new Map(ath.map((a) => [String(a.id), a.gsis]));
+  const espnOf = new Map(ath.map((a) => [a.gsis, String(a.id)]));
+  const injBy = new Map(ctxRows.map((c) => [String(c.game_id), (c.injuries || []).map((x) => ({ ...x, gsis: gsisOf.get(String(x.id)) })).filter((x) => x.gsis)]));
+  const OUT = /^(out|doubtful|injured reserve|ir|suspension|pup)/i;
 
   // ---- backtest: each past week from earlier weeks only, against the closing line ----
   const groups = ['RB', 'WR', 'TE', 'QB'];
@@ -116,21 +136,78 @@ export async function render(el) {
     const tot = g.total !== null ? Number(g.total) : hrow.total_line, sp = g.spread_home !== null ? Number(g.spread_home) : (hrow.spread_line !== null ? -hrow.spread_line : null);
     const sides = [[hrow.home_team, hrow.away_team, tot !== null && sp !== null ? tot / 2 - sp / 2 : null, g.data.home], [hrow.away_team, hrow.home_team, tot !== null && sp !== null ? tot / 2 + sp / 2 : null, g.data.away]];
     const list = [];
+    const inj = injBy.get(String(g.id)) || [];
+    const status = new Map(inj.map((x) => [x.gsis, x]));
     for (const [team, opp, implied, espnTeam] of sides) {
-      for (const [pid] of m.byP) {
-        const L = lambda(m, players, pid, opp, implied); if (!L || L.team !== team) continue;
-        list.push({ pid, name: players[pid][0], pos: players[pid][1], shot: players[pid][2], L, p: calP(L.g, toP(L.lam)), implied, espnTeam, opp });
+      const base = [];
+      for (const [pid] of m.byP) { const L = lambda(m, players, pid, opp, implied); if (L && L.team === team) base.push({ pid, L }); }
+      // players ruled out: their expected carries and targets move to healthy teammates at the same position
+      const outs = base.filter((x) => OUT.test(status.get(x.pid)?.status || ''));
+      const healthy = base.filter((x) => !OUT.test(status.get(x.pid)?.status || ''));
+      const freed = {}; for (const o of outs) { const f = freed[o.L.g] ??= { c: 0, t: 0, who: [] }; f.c += o.L.eC; f.t += o.L.eT; f.who.push(players[o.pid][0]); }
+      for (const x of healthy) {
+        let L = x.L, boostNote = null;
+        const f = freed[L.g];
+        if (f && (f.c + f.t) >= 2) {
+          const same = healthy.filter((y) => y.L.g === L.g), totC = same.reduce((a, y) => a + y.L.eC, 0) || 1, totT = same.reduce((a, y) => a + y.L.eT, 0) || 1;
+          const add = { c: f.c * 0.7 * (L.eC / totC), t: f.t * 0.7 * (L.eT / totT) }; // 70%: some of the work goes to players not on this list
+          if (add.c + add.t >= 0.5) { L = lambda(m, players, x.pid, opp, implied, add); boostNote = { names: f.who, add: add.c + add.t }; }
+        }
+        list.push({ pid: x.pid, name: players[x.pid][0], pos: players[x.pid][1], shot: players[x.pid][2], L, p: calP(L.g, toP(L.lam)), implied, espnTeam, opp, team, status: status.get(x.pid)?.status ?? null, boostNote, opImp: null });
       }
+      // depth: rank among teammates at the same position by expected work
+      const teamList = list.filter((y) => y.team === team);
+      for (const y of teamList) { const same = teamList.filter((z) => z.L.g === y.L.g).sort((a, b2) => (b2.L.eC + b2.L.eT) - (a.L.eC + a.L.eT)); y.depth = same.indexOf(y) + 1;
+        const tc = base.reduce((a2, z) => a2 + z.L.eC, 0), tt = base.reduce((a2, z) => a2 + z.L.eT, 0); y.shareC = tc ? y.L.eC / tc : 0; y.shareT = tt ? y.L.eT / tt : 0; }
     }
     list.sort((a, b) => b.p - a.p);
-    return { g, top: list.slice(0, 4), next: list.slice(4, 7) };
+    for (const x of list) x._gid = g.id;
+    for (const x of list) x.oppImp = sides.find((sd) => sd[0] === x.opp)?.[2] ?? null;
+    const outsList = inj.filter((x) => OUT.test(x.status || '') && ['RB', 'WR', 'TE', 'QB'].includes(x.pos));
+    return { g, hrow, sides, top: list.slice(0, 4), next: list.slice(4, 7), all: list, outsList };
   }).filter(Boolean);
   const locks = cards.map((c) => c.top[0]).filter(Boolean).sort((a, b) => b.p - a.p).slice(0, 5);
   const allTop2 = weekly.reduce((a, w) => ({ hit: a.hit + w.hit, tot: a.tot + w.tot }), { hit: 0, tot: 0 });
 
-  const pCard = (x) => `<div class="row" style="justify-content:space-between;padding:7px 0;border-top:1px solid var(--line)">
+  const byKey = new Map(); for (const c of cards) for (const x of c.all) byKey.set(`${c.g.id}|${x.pid}`, { x, c });
+  const ord = (n) => n + (n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th');
+  const calNote = (g) => { const c = cal[g]; if (!c.n) return ''; const d = c.act / c.n - c.pred / c.n; return Math.abs(d) < 0.015 ? '' : d < 0 ? `${g} forecasts have run high this season, so the chance is marked down.` : `${g} forecasts have run low this season, so the chance is marked up.`; };
+  const conf = (x) => x.L.gp >= 6 && !x.boostNote && !x.status ? 'High' : x.L.gp < 3 || x.status ? 'Low' : 'Medium';
+  const bars = (x) => {
+    const touches = x.L.eC + x.L.eT;
+    const fin = x.L.g === 'QB' ? x.L.rRush / (m.rate.QB.rush || 0.03) : (x.L.eC * x.L.rRush + x.L.eT * x.L.rRec) / Math.max(0.1, x.L.eC * m.rate[x.L.g].rush + x.L.eT * m.rate[x.L.g].rec);
+    return [['Usage', Math.min(100, touches / 18 * 100), `${touches.toFixed(1)} expected touches`], ['Matchup', Math.max(0, Math.min(100, 50 + (x.L.fOpp - 1) * 125)), x.L.fOpp > 1.05 ? 'Softer than average' : x.L.fOpp < 0.95 ? 'Tougher than average' : 'About average'],
+      ['Finishing', Math.max(0, Math.min(100, fin * 50)), `${x.L.sRT + x.L.sCT} TD on ${Math.round(x.L.eC * x.L.gp + x.L.eT * x.L.gp)} looks`], ['Script', Math.max(0, Math.min(100, (x.implied ?? 0) / 30 * 100)), x.implied ? `Implied ${x.implied.toFixed(1)}` : 'No line yet']];
+  };
+  function detail(x, c) {
+    const d = m.def.get(x.opp), team = x.espnTeam.abbr, oppAbbr = (c.g.data.home.abbr === team ? c.g.data.away : c.g.data.home);
+    const pos = x.L.g, depthWord = x.depth === 1 ? (pos === 'RB' ? 'Lead back' : pos === 'QB' ? 'Starter' : `${pos}1`) : `${pos}${x.depth}`;
+    const share = pos === 'RB' || pos === 'QB' ? (x.shareC >= 0.1 ? `Handles ${Math.round(x.shareC * 100)}% of team carries. ` : '') : (x.shareT >= 0.08 ? `Gets ${Math.round(x.shareT * 100)}% of team targets. ` : '');
+    const role = `Projected ${x.L.eC.toFixed(1)} carries and ${x.L.eT.toFixed(1)} targets. ${share}${depthWord} with ${x.L.sRT + x.L.sCT} score${x.L.sRT + x.L.sCT === 1 ? '' : 's'} in ${x.L.gp} games (${x.L.scoredGames} games with one).`;
+    const ease = x.L.fOpp > 1.05 ? 'easier than a typical defense to score on' : x.L.fOpp < 0.95 ? 'harder than a typical defense to score on' : 'about average to score on';
+    const matchup = d ? `${oppAbbr.short}: ${d.rush.toFixed(1)} rush TD/g allowed (${ord(m.defRank.rush.get(x.opp))}-most of ${m.nDef}), ${d.pass.toFixed(1)} pass TD/g (${ord(m.defRank.pass.get(x.opp))}-most). Against ${pos}s specifically, this is ${ease}.` : 'Not enough games to rate this defense yet.';
+    const fav = c.g.spread_home === null ? '' : (() => { const sp = Number(c.g.spread_home) * (c.g.data.home.abbr === team ? 1 : -1); return sp < 0 ? ` ${x.espnTeam.short} are favored by ${-sp}.` : sp > 0 ? ` ${x.espnTeam.short} are getting ${sp}.` : ' Pick’em.'; })();
+    const recent = x.L.recExp > 0.3 ? (x.L.recTD < x.L.recExp * 0.6 ? ' Recent weeks have been quieter than his role suggests.' : x.L.recTD > x.L.recExp * 1.6 ? ` Scored ${x.L.recTD} in his last three, ahead of what his role suggests.` : '') : '';
+    const spot = `${x.boostNote ? `${x.boostNote.names.join(' and ')} ${x.boostNote.names.length > 1 ? 'are' : 'is'} out, so about ${x.boostNote.add.toFixed(1)} more touches come his way. ` : ''}${x.implied ? `Implied team total ${x.implied.toFixed(1)}.` : ''}${fav}${recent} ${calNote(pos)}`.trim();
+    const cf = conf(x);
+    return `<div class="rz-ov" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px" data-close>
+      <div class="card" style="max-width:640px;width:100%;margin:auto;padding:18px" onclick="event.stopPropagation()">
+        <div class="row" style="justify-content:space-between;align-items:flex-start">
+          <span class="team">${x.shot ? `<img style="width:56px;height:56px;border-radius:50%;object-fit:cover;background:var(--surface2)" src="${esc(x.shot)}" alt="" referrerpolicy="no-referrer">` : ''}<span><b class="disp" style="font-size:22px">${esc(x.name)}</b><div class="dim" style="font-size:13px">${esc(x.pos)} · ${esc(team)} vs ${esc(oppAbbr.abbr)} · ${x.L.sRT + x.L.sCT} TD in ${x.L.gp}g${x.status ? ` · <span class="clay">${esc(x.status)}</span>` : ''}</div></span></span>
+          <span style="text-align:right"><b class="disp num" style="font-size:40px;line-height:1">${pct(x.p)}</b><div class="dim" style="font-size:12px">${cf} confidence</div></span></div>
+        <div style="font-size:14px;margin-top:14px;line-height:1.5">
+          <p style="margin:0 0 8px"><span class="kicker" style="margin-right:6px">Role</span>${esc(role)}</p>
+          <p style="margin:0 0 8px"><span class="kicker" style="margin-right:6px">Matchup</span>${esc(matchup)}</p>
+          <p style="margin:0"><span class="kicker" style="margin-right:6px">Spot</span>${esc(spot)}</p></div>
+        <div class="grid g4" style="margin-top:14px;gap:10px">${bars(x).map(([k, v, sub]) => `<div><div class="row" style="justify-content:space-between;font-size:12px"><span class="dim">${k}</span><b class="num">${Math.round(v)}</b></div>
+          <div style="height:6px;background:var(--line2);border-radius:3px;margin:4px 0"><div style="height:6px;width:${v}%;background:var(--ink);border-radius:3px"></div></div><div class="dim" style="font-size:11.5px">${esc(sub)}</div></div>`).join('')}</div>
+        <div class="dim" style="font-size:12px;margin-top:10px">Last 4 games: ${x.L.last.join(', ')} TD. Confidence is High with 6+ games and a steady role, Low with under 3 games, an injury tag, or a role that just changed.</div>
+        <div class="row" style="gap:8px;margin-top:14px;justify-content:flex-end">${trackBtn({ gid: String(c.g.id), market: 'prop', aid: espnOf.get(x.pid) ?? '', stat: 'td', side: 'over', line: 0.5, name: x.name, game: `${c.g.data.away.short} @ ${c.g.data.home.short}`, start: c.g.start_time, tool: 'Redzone', gsis: x.pid })}<button class="btn" data-copy="${esc(`${x.name} anytime TD`)}">Copy</button><button class="btn" data-close>Close</button></div>
+      </div></div>`;
+  }
+  const pCard = (x) => `<div class="row" data-rz="${esc(`${x._gid}|${x.pid}`)}" style="justify-content:space-between;padding:7px 0;border-top:1px solid var(--line);cursor:pointer" title="Tap for the breakdown">
     <span class="team">${x.shot ? `<img class="logo" style="width:30px;height:30px;border-radius:50%;object-fit:cover;background:var(--surface2)" src="${esc(x.shot)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}<span><b>${esc(x.name)}</b> <span class="dim">${esc(x.pos)} · ${esc(x.espnTeam.abbr)}</span>
-      <div class="dim" style="font-size:12px">${x.L.eC >= 1 ? `${x.L.eC.toFixed(1)} carries` : ''}${x.L.eC >= 1 && x.L.eT >= 1 ? ' · ' : ''}${x.L.eT >= 1 ? `${x.L.eT.toFixed(1)} targets` : ''} · ${x.L.sRT + x.L.sCT} TD in ${x.L.gp} · last 4: ${x.L.last.join(', ')}</div></span></span>
+      ${x.status ? ` <span class="chip clay" style="font-size:10px">${esc(x.status)}</span>` : ''}${x.boostNote ? ' <span class="chip gold" style="font-size:10px">more work</span>' : ''}<div class="dim" style="font-size:12px">${x.L.eC >= 1 ? `${x.L.eC.toFixed(1)} carries` : ''}${x.L.eC >= 1 && x.L.eT >= 1 ? ' · ' : ''}${x.L.eT >= 1 ? `${x.L.eT.toFixed(1)} targets` : ''} · ${x.L.sRT + x.L.sCT} TD in ${x.L.gp} · last 4: ${x.L.last.join(', ')}</div></span></span>
     <span style="text-align:right"><b class="disp num" style="font-size:22px">${pct(x.p)}</b><div class="dim" style="font-size:11px">${x.L.fOpp > 1.1 ? 'soft defense' : x.L.fOpp < 0.9 ? 'tough defense' : ''}${x.L.fTeam > 1.1 ? ' · high total' : x.L.fTeam < 0.9 ? ' · low total' : ''}</div></span></div>`;
 
   function draw() {
@@ -141,6 +218,8 @@ export async function render(el) {
       <li><b>Role:</b> carries and targets from his last four games, weighted toward the most recent.</li>
       <li><b>Finishing:</b> touchdowns per carry and per target this season, pulled toward his position’s average so one lucky week doesn’t dominate.</li>
       <li><b>Spot:</b> scaled by his team’s implied points from the DraftKings spread and total, and by how many touchdowns the defense allows to his position.</li>
+      <li><b>Injuries:</b> players ESPN lists as out or doubtful are dropped, and 70% of their expected carries and targets move to healthy teammates at the same position. Questionable players stay on with a tag.</li>
+      <li><b>Tap any player</b> for the full breakdown: role, matchup, spot, and four 0–100 bars (usage, matchup, finishing, script).</li>
       <li><b>Kept honest:</b> every past week is re-forecast using only earlier weeks, then the forecasts are fitted to what actually happened, so a 40% here has scored about 40% of the time (table below). QB passing touchdowns don’t count. Injury news isn’t included, so check status before you bet.</li></ol>`, 'rz')}
     <div class="grid g4">${groups.map((g) => { const c = cal[g]; return `<div class="card stat"><div class="k">${g}s, forecast vs actual</div><div class="v num">${c.n ? `${pct(c.pred / c.n)} → ${pct(c.act / c.n)}` : '—'}</div><div class="s">${c.n} player-games before calibration</div></div>`; }).join('')}</div>
     <div class="card" style="padding:4px 12px;margin-top:12px;overflow-x:auto"><table class="t"><tr><th>After calibration, forecast band</th><th class="r">Player-games</th><th class="r">Forecast</th><th class="r">Actually scored</th></tr>
@@ -151,7 +230,8 @@ export async function render(el) {
       ${locks.length ? `<div class="sec" style="margin-top:0"><h2>Best bets to score</h2><div class="grid g2">${locks.map((x) => `<div class="card hl">${pCard(x)}<div style="margin-top:6px"><button class="btn" data-copy="${esc(`${x.name} anytime TD`)}">Copy</button></div></div>`).join('')}</div></div>` : ''}
       <div class="sec"><h2>Every game</h2><div class="grid g2">${cards.map((c) => `<div class="card">
         <div class="row" style="justify-content:space-between;font-size:13px"><span>${esc(c.g.data.away.short)} @ ${esc(c.g.data.home.short)}</span><span class="dim">${esc(fmtDay(c.g.start_time))} ${esc(fmtTime(c.g.start_time))}</span></div>
-        <div class="dim" style="font-size:12px;margin:4px 0">O/U ${c.g.total ?? '—'} · ${esc(c.g.data.home.abbr)} ${c.g.spread_home ?? ''}</div>
+        <div class="dim" style="font-size:12px;margin:4px 0">O/U ${c.g.total ?? '—'} · ${esc(c.g.data.home.abbr)} ${c.g.spread_home ?? ''}${c.sides[0][2] !== null ? ` · implied ${esc(c.g.data.away.abbr)} ${c.sides[1][2].toFixed(1)}, ${esc(c.g.data.home.abbr)} ${c.sides[0][2].toFixed(1)}` : ''}</div>
+        <div class="dim" style="font-size:11.5px;margin-bottom:4px">${[[c.g.data.away.abbr, c.hrow.away_team], [c.g.data.home.abbr, c.hrow.home_team]].map(([ab, t]) => { const d = m.def.get(t); return d ? `${esc(ab)} D allows ${d.rush.toFixed(1)} rush / ${d.pass.toFixed(1)} pass TD a game` : ''; }).filter(Boolean).join(' · ')}${c.outsList.length ? ` · <span class="clay">Out: ${c.outsList.slice(0, 4).map((o) => esc(o.name)).join(', ')}${c.outsList.length > 4 ? '…' : ''}</span>` : ''}</div>
         ${c.top.map(pCard).join('')}
         ${c.next.length ? `<div class="dim" style="font-size:12px;margin-top:8px">Next: ${c.next.map((x) => `${esc(x.name)} ${pct(x.p)}`).join(' · ')}</div>` : ''}
       </div>`).join('') || '<div class="empty">No games with lines yet this week.</div>'}</div></div>`
@@ -162,6 +242,15 @@ export async function render(el) {
     onSeg(el, 'view', (v) => { st.view = v; store.set('rz:view', v); draw(); });
     el.querySelector('[data-act=refresh]').onclick = () => { clearCache(); render(el); };
     el.querySelectorAll('[data-copy]').forEach((b) => b.onclick = () => copy(b.dataset.copy));
+    el.querySelectorAll('[data-rz]').forEach((r) => r.onclick = () => {
+      const hit = byKey.get(r.dataset.rz); if (!hit) return;
+      const box = document.createElement('div'); box.innerHTML = detail(hit.x, hit.c); const ov = box.firstElementChild; el.appendChild(ov);
+      const close = () => { ov.remove(); document.removeEventListener('keydown', esc_); };
+      const esc_ = (e) => { if (e.key === 'Escape') close(); };
+      document.addEventListener('keydown', esc_);
+      ov.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', (e) => { if (e.target === b) close(); }));
+      ov.querySelectorAll('[data-copy]').forEach((b) => b.onclick = () => copy(b.dataset.copy));
+    });
     wireHow(el);
   }
   draw();
