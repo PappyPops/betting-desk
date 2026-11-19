@@ -80,8 +80,7 @@ async function cbs(lg: string) {
     if (!ex.has(eid)) ex.set(eid, { id: eid, name: who, username: 'cbs-' + norm(who), source: 'cbs', _pos: pos, updated_at: new Date().toISOString() });
     picks.push({ id: hid(`cbs:${lg}:${who}:${g.id}:${type}`), expert_id: eid, source: 'cbs', league: lg, action_game_id: null, espn_id: String(g.id), type, play: label, value, odds: -110, units: null, starts_at: g.start_time, created_at: new Date().toISOString(), side, status: 'published', updated_at: new Date().toISOString() });
   }
-  for (const m of html.matchAll(/OVERALL:\s*<\/?[^>]*>?\s*(\d+-\d+(?:-\d+)?)/g)) recs.push(m[1]);
-  if (!recs.length) for (const m of html.matchAll(/OVERALL:\s*(\d+-\d+(?:-\d+)?)/g)) recs.push(m[1]);
+  for (const m of html.matchAll(/overallRecords">\s*Overall:\s*(\d+-\d+(?:-\d+)?)/gi)) recs.push(m[1]);
   for (const e of ex.values()) {
     const r = recs[e._pos - 1]; delete e._pos;
     if (r && recs.length === names.filter(Boolean).length) { const [w, l, pu] = r.split('-').map(Number); e.record = { win: w, loss: l, push: pu || 0, count: w + l + (pu || 0), units_net: w * 0.909 - l, window: 'season, against the spread' }; e.record_text = `${r} ATS (CBS)`; }
