@@ -1,20 +1,21 @@
-import { wireTrack } from './mybets.js?v=202611181552';
-import { lastSync, ago, esc } from './core.js?v=202611181552';
+import { wireTrack } from './mybets.js?v=202611190035';
+import { lastSync, ago, esc } from './core.js?v=202611190035';
 
 const TOOLS = [
-  { id: 'desk', name: 'Today', grp: 'Desk', load: () => import('./desk.js?v=202611181552') },
-  { id: 'mybets', name: 'My Bets', grp: 'Desk', load: () => import('./mybets.js?v=202611181552') },
-  { id: 'whistle', name: 'At the Whistle', grp: 'Live', load: () => import('./whistle.js?v=202611181552') },
-  { id: 'juice', name: 'The Juice', grp: 'Market', load: () => import('./juice.js?v=202611181552') },
-  { id: 'linelife', name: 'Line Life', grp: 'Market', load: () => import('./linelife.js?v=202611181552') },
-  { id: 'matrix', name: 'Matrix', grp: 'Models', load: () => import('./matrix.js?v=202611181552') },
-  { id: 'tease', name: 'Tease Me', grp: 'Models', load: () => import('./tease.js?v=202611181552') },
-  { id: 'paint', name: 'In the Paint', grp: 'Models', load: () => import('./paint.js?v=202611181552') },
-  { id: 'redzone', name: 'Redzone', grp: 'Models', load: () => import('./redzone.js?v=202611181552') },
-  { id: 'slant', name: 'Slant', grp: 'Models', load: () => import('./slant.js?v=202611181552') },
-  { id: 'capn', name: "Cap'n Cash", grp: 'Crowd', load: () => import('./capn.js?v=202611181552') },
-  { id: 'eye', name: 'Eye in the Sky', grp: 'Watch', load: () => import('./eye.js?v=202611181552') },
-  { id: 'scratch', name: 'Cooking from Scratch', grp: 'Off the field', load: () => import('./scratch.js?v=202611181552') },
+  { id: 'desk', name: 'Today', grp: 'Desk', load: () => import('./desk.js?v=202611190035') },
+  { id: 'council', name: 'Betting Council', grp: 'Desk', load: () => import('./council.js?v=202611190035') },
+  { id: 'mybets', name: 'My Bets', grp: 'Desk', load: () => import('./mybets.js?v=202611190035') },
+  { id: 'whistle', name: 'At the Whistle', grp: 'Live', load: () => import('./whistle.js?v=202611190035') },
+  { id: 'juice', name: 'The Juice', grp: 'Market', load: () => import('./juice.js?v=202611190035') },
+  { id: 'linelife', name: 'Line Life', grp: 'Market', load: () => import('./linelife.js?v=202611190035') },
+  { id: 'matrix', name: 'Matrix', grp: 'Models', load: () => import('./matrix.js?v=202611190035') },
+  { id: 'tease', name: 'Tease Me', grp: 'Models', load: () => import('./tease.js?v=202611190035') },
+  { id: 'paint', name: 'In the Paint', grp: 'Models', load: () => import('./paint.js?v=202611190035') },
+  { id: 'redzone', name: 'Redzone', grp: 'Models', load: () => import('./redzone.js?v=202611190035') },
+  { id: 'slant', name: 'Slant', grp: 'Models', load: () => import('./slant.js?v=202611190035') },
+  { id: 'capn', name: "Cap'n Cash", grp: 'Crowd', load: () => import('./capn.js?v=202611190035') },
+  { id: 'eye', name: 'Eye in the Sky', grp: 'Watch', load: () => import('./eye.js?v=202611190035') },
+  { id: 'scratch', name: 'Cooking from Scratch', grp: 'Off the field', load: () => import('./scratch.js?v=202611190035') },
 ];
 export const toolById = Object.fromEntries(TOOLS.map((t) => [t.id, t]));
 
