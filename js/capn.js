@@ -1,7 +1,7 @@
-import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611191518';
+import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611191919';
 
 const LGS = [['nfl', 'NFL'], ['cfb', 'College'], ['nba', 'NBA']];
-const SRC = { action: 'Action', docs: 'Doc’s', espn: 'ESPN' };
+const SRC = { action: 'Action', docs: 'Doc’s', espn: 'ESPN', cbs: 'CBS' };
 const MKT = (t) => /^spread/.test(t) ? 'sp' : /^ml/.test(t) ? 'ml' : ['over', 'under'].includes(t) ? 'tot' : null;
 const MKN = { sp: 'Spread', tot: 'Total', ml: 'Moneyline' };
 const median = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : null; };
@@ -78,12 +78,12 @@ export async function render(el) {
     <div class="ph"><div><div class="kicker">Handicapper overlap</div><h1>Cap’n Cash</h1><p>Public handicapper cards stacked by game. A side is <b>loud</b> when 3 or more handicappers are on it, ignoring half-point differences.</p></div>
       <div class="row"><span class="stamp">Cards ${esc(ago(at))}</span><button class="btn" data-act="refresh">↻ Refresh</button></div></div>
     ${howTo('How it works', `<ol>
-      <li>Picks come from Action Network’s public handicappers (every 30 minutes), Doc’s Sports free picks, and ESPN’s NFL expert panel (every 2 hours).</li>
+      <li>Picks come from Action Network’s public handicappers (every 30 minutes), CBS Sports’ expert picks against the spread (NFL, college), Doc’s Sports free picks, and ESPN’s NFL expert panel (every 2 hours).</li>
       <li>ESPN’s panel only picks winners, not spreads, so it shows as its own line on each game and doesn’t count toward loud.</li>
-      <li>Loud sides are graded after the final at the median number among the handicappers on it. Doc’s handicappers start with a blank record and build one here as their picks are graded.</li>
-      <li>CBS Sports and Pickswise load their picks in the browser, out of reach of the backend, so they aren’t included.</li></ol>`, 'capn')}
+      <li>Loud sides are graded after the final at the median number among the handicappers on it. CBS pickers show CBS’s own season record against the spread; Doc’s handicappers build a record here as their picks are graded.</li>
+      <li>Pickswise loads its picks in the browser, out of reach of the backend, so it isn’t included.</li></ol>`, 'capn')}
     <div class="grid g4" style="margin-bottom:14px">
-      <div class="card stat"><div class="k">Handicappers</div><div class="v num">${experts.size}</div><div class="s">Action, Doc’s, ESPN</div></div>
+      <div class="card stat"><div class="k">Handicappers</div><div class="v num">${experts.size}</div><div class="s">Action, CBS, Doc’s, ESPN</div></div>
       <div class="card stat"><div class="k">Open picks</div><div class="v num">${open.length}</div><div class="s">${esc(LGS.find((x) => x[0] === st.lg)[1])}, not yet played</div></div>
       <div class="card stat"><div class="k">Loudest stack</div><div class="v num">${loud[0] ? loud[0].picks.length : '—'}</div><div class="s">${loud[0] ? esc(sideLabel(games.get(loud[0].gid), loud[0].mk, loud[0].side) + ' · ' + MKN[loud[0].mk]) : 'needs 3 on one side'}</div></div>
       <div class="card stat"><div class="k">Popular record</div><div class="v num">${lw + ll ? `${lw}–${ll}${lp ? '–' + lp : ''}` : '—'}</div><div class="s">loud sides, finals only</div></div>
@@ -95,7 +95,7 @@ export async function render(el) {
         <div class="row" style="justify-content:space-between;margin:4px 0 6px"><b class="disp" style="font-size:22px">${esc(sideLabel(g, s.mk, s.side))} ${s.mk === 'ml' ? 'ML' : s.mk === 'tot' ? mv : line(mv)}</b><span class="chip gold">${s.picks.length} on it</span></div>
         ${s.picks.map(pickRow).join('')}</div>`; }).join('')}</div></div>` : '<div class="empty">No side has 3 handicappers on it yet. Cards fill in through the week.</div>'}
       <div class="sec"><h2>Every card</h2><p class="sub">All open picks, by game.</p><div class="grid g2">${gameList.map(({ gid, g, ss }) => `<div class="card">
-        <div class="row" style="justify-content:space-between;font-size:13px"><span>${esc(fmtDay(g.start_time))} · ${esc(fmtTime(g.start_time))}</span><span class="dim">${ss.reduce((a, s) => a + s.picks.length, 0)} picks</span></div>
+        <div class="row" style="justify-content:space-between;font-size:13px"><span>${esc(fmtDay(g.start_time))} · ${esc(fmtTime(g.start_time))}</span><span class="dim">${(() => { const all = ss.flatMap((s) => s.picks); const pn = panel.get(gid); const n = all.length + (pn ? pn.home + pn.away : 0); const by = {}; for (const k of all) by[k.source] = (by[k.source] || 0) + 1; if (pn) by.espn = pn.home + pn.away; return `${n} picks · ${Object.entries(by).map(([k, v]) => `${SRC[k] ?? k} ${v}`).join(', ')}`; })()}</span></div>
         <div class="team" style="margin-top:8px">${logo(g.data.away)}<b>${esc(g.data.away.short)}</b></div><div class="team" style="margin-top:4px">${logo(g.data.home)}<b>${esc(g.data.home.short)}</b></div>
         ${panelLine(gid, g)}
         ${ss.sort((a, b) => b.picks.length - a.picks.length).map((s) => `<div style="margin-top:10px"><div class="row" style="justify-content:space-between"><b style="font-size:13px">${esc(sideLabel(g, s.mk, s.side))} · ${MKN[s.mk]}</b><span class="chip ${s.picks.length >= 3 ? 'gold' : ''}">${s.picks.length}</span></div>${s.picks.map(pickRow).join('')}</div>`).join('')}

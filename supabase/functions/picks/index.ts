@@ -1,4 +1,4 @@
-// More public handicapper picks for Cap'n Cash: ESPN's NFL expert picks and Doc's Sports free picks.
+// More public handicapper picks for Cap'n Cash: ESPN's NFL expert picks, CBS Sports' expert picks and Doc's Sports free picks.
 // Grades every non-Action pick against ESPN finals and keeps each handicapper's record.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
@@ -11,7 +11,8 @@ function hid(s: string) {
   for (let i = 0; i < s.length; i++) { a = Math.imul(a ^ s.charCodeAt(i), 16777619) >>> 0; b = Math.imul(b ^ s.charCodeAt(i), 2246822519) >>> 0; }
   return 4e15 + (a % 2 ** 20) * 2 ** 26 + (b % 2 ** 26);
 }
-async function text(url: string) { const r = await fetch(url, { headers: H, signal: AbortSignal.timeout(20000) }); if (!r.ok) throw new Error(`${r.status} ${url}`); return r.text(); }
+const BROWSER = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36', 'Accept': 'text/html' };
+async function text(url: string, headers: Record<string, string> = H) { const r = await fetch(url, { headers, signal: AbortSignal.timeout(20000) }); if (!r.ok) throw new Error(`${r.status} ${url}`); return r.text(); }
 async function gamesIn(lg: string, back = 3, fwd = 9) {
   const { data } = await sb.from('games').select('id,start_time,state,home,away,home_score,away_score,data').eq('league', lg)
     .gte('start_time', new Date(Date.now() - back * 86400e3).toISOString()).lt('start_time', new Date(Date.now() + fwd * 86400e3).toISOString());
@@ -45,6 +46,47 @@ async function espn() {
     }
   }
   return { ex, picks };
+}
+
+// ---------- CBS Sports expert picks against the spread (server-rendered pick buttons) ----------
+const CBS: Record<string, string> = { nfl: 'nfl', cfb: 'college-football' }; // CBS has no NBA expert board
+async function cbs(lg: string) {
+  const html = (await text(`https://www.cbssports.com/${CBS[lg]}/picks/experts/`, BROWSER)).replace(/\s+/g, ' ');
+  const games = await gamesIn(lg, 1, 9);
+  const now = Date.now();
+  // season records from the header, in the same order as the pickers' columns
+  const names: string[] = [], recs: string[] = [];
+  const ex = new Map<number, any>(), picks: any[] = [];
+  const re = /<a href="\/[a-z-]+\/teams\/([A-Z0-9]+)\/([a-z0-9-]+)\/"[^>]*>(?:(?!<\/td>).)*?data-config='(\{[^']*\})'(?:(?!<\/td>).)*?BetButton-text">\s*([^<]+?)\s*</g;
+  for (const m of html.matchAll(re)) {
+    let cfg: any; try { cfg = JSON.parse(m[4].replace(/&quot;/g, '"')); } catch { continue; }
+    const who = cfg?.meta?.bets?.[0]?.expertLabel; if (!who) continue;
+    const pos = Number(cfg.meta.bets[0].position);
+    if (pos && !names[pos - 1]) names[pos - 1] = who;
+    const slug = norm(m[2]), abbr = m[1].toLowerCase(), label = m[5].trim();
+    const cand = games.filter((g: any) => { const t = new Date(g.start_time).getTime(); return t > now - 6 * 3600e3 && [g.data?.home, g.data?.away].some((d: any) => d && (norm(d.name) === slug || norm(d.abbr) === abbr)); })
+      .sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+    const g: any = cand[0]; if (!g) continue;
+    const isTot = /total|over|under/i.test(String(cfg.marketName)) || /^(o|u|over|under)\s/i.test(label);
+    let side: string, type: string, value: number;
+    if (isTot) { side = /^(o|over)/i.test(label) ? 'over' : 'under'; type = side; value = Number(String(cfg.line).replace(/[^0-9.]/g, '')); }
+    else {
+      side = (norm(g.data?.home?.name) === slug || norm(g.data?.home?.abbr) === abbr) ? 'home' : 'away';
+      const n = label.match(/([+-]?\d+(\.\d+)?)\s*$/); value = /pk|even/i.test(label) ? 0 : n ? Number(n[1]) : Number(cfg.line);
+      if (!Number.isFinite(value)) continue;
+      type = `spread_${side}`;
+    }
+    const eid = hid('cbs:' + who.toLowerCase());
+    if (!ex.has(eid)) ex.set(eid, { id: eid, name: who, username: 'cbs-' + norm(who), source: 'cbs', _pos: pos, updated_at: new Date().toISOString() });
+    picks.push({ id: hid(`cbs:${lg}:${who}:${g.id}:${type}`), expert_id: eid, source: 'cbs', league: lg, action_game_id: null, espn_id: String(g.id), type, play: label, value, odds: -110, units: null, starts_at: g.start_time, created_at: new Date().toISOString(), side, status: 'published', updated_at: new Date().toISOString() });
+  }
+  for (const m of html.matchAll(/OVERALL:\s*<\/?[^>]*>?\s*(\d+-\d+(?:-\d+)?)/g)) recs.push(m[1]);
+  if (!recs.length) for (const m of html.matchAll(/OVERALL:\s*(\d+-\d+(?:-\d+)?)/g)) recs.push(m[1]);
+  for (const e of ex.values()) {
+    const r = recs[e._pos - 1]; delete e._pos;
+    if (r && recs.length === names.filter(Boolean).length) { const [w, l, pu] = r.split('-').map(Number); e.record = { win: w, loss: l, push: pu || 0, count: w + l + (pu || 0), units_net: w * 0.909 - l, window: 'season, against the spread' }; e.record_text = `${r} ATS (CBS)`; }
+  }
+  return { ex: [...ex.values()], picks };
 }
 
 // ---------- Doc's Sports free picks (one article per game) ----------
@@ -116,7 +158,7 @@ async function gradeAll() {
   }
   for (const u of upd) await sb.from('expert_picks').update({ result: u.result, status: u.status, units_net: u.units_net }).eq('id', u.id);
   // Doc's handicappers: record from graded picks here
-  const { data: settled } = await sb.from('expert_picks').select('expert_id,result').eq('source', 'docs').eq('status', 'settled');
+  const { data: settled } = await sb.from('expert_picks').select('expert_id,result').eq('source', 'docs').eq('status', 'settled'); // CBS pickers keep CBS's own season record
   const rec = new Map<number, any>();
   for (const s of settled ?? []) { const r = rec.get(s.expert_id) ?? { win: 0, loss: 0, push: 0 }; if (s.result === 'win') r.win++; else if (s.result === 'loss') r.loss++; else r.push++; rec.set(s.expert_id, r); }
   for (const [id, r] of rec) await sb.from('experts').update({ record: { ...r, count: r.win + r.loss + r.push, units_net: r.win * 0.909 - r.loss, window: 'tracked here' } }).eq('id', id);
@@ -125,7 +167,7 @@ async function gradeAll() {
 
 Deno.serve(async () => {
   const out: Record<string, unknown> = {};
-  const jobs: [string, () => Promise<any>][] = [['espn', espn], ['docs_nfl', () => docs('nfl')], ['docs_cfb', () => docs('cfb')], ['docs_nba', () => docs('nba')]];
+  const jobs: [string, () => Promise<any>][] = [['espn', espn], ['cbs_nfl', () => cbs('nfl')], ['cbs_cfb', () => cbs('cfb')], ['docs_nfl', () => docs('nfl')], ['docs_cfb', () => docs('cfb')], ['docs_nba', () => docs('nba')]];
   const pause = () => new Promise((r) => setTimeout(r, 2000));
   for (const [name, fn] of jobs) {
     try {

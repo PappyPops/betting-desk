@@ -1,4 +1,4 @@
-import { games, fmtTime, fmtDay, dayKey, esc, logo, seg, onSeg, store, tzPref, TZS, howTo, wireHow, footNote, clearCache } from './core.js?v=202611191518';
+import { games, fmtTime, fmtDay, dayKey, esc, logo, seg, onSeg, store, tzPref, TZS, howTo, wireHow, footNote, clearCache } from './core.js?v=202611191919';
 
 const NET_ORDER = ['CBS', 'Fox', 'NBC', 'ABC', 'ESPN', 'ESPN2', 'ESPNU', 'ESPN+', 'Prime Video', 'Netflix', 'NFL Net', 'Peacock', 'Disney+', 'FS1', 'CBSSN', 'BTN', 'SEC Network', 'SECN+', 'ACC Network', 'ACCNX', 'CW', 'TNT', 'USA Net'];
 
