@@ -1,6 +1,6 @@
 // My Bets: track the bets you actually place from any tool, graded automatically, with units and ROI by tool.
 // Saved in this browser; Export and Import move them to another phone or computer.
-import { api, blob, esc, fmtDay, fmtTime, pct, odds, store, toast, footNote, seg, onSeg } from './core.js?v=202611190111';
+import { api, blob, esc, fmtDay, fmtTime, pct, odds, store, toast, footNote, seg, onSeg } from './core.js?v=202611191518';
 
 const KEY = 'mybets';
 export const getBets = () => store.get(KEY, []);
