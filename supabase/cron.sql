@@ -17,3 +17,5 @@ select cron.schedule('props-nfl', '7,37 * * * *', $$select public.call_fn('props
 select cron.schedule('nfl-whistle', '* 0-6,16-23 * * *', $$select public.call_fn('whistle', 60000)$$);
 
 select cron.schedule('lotto-scratch', '23 */6 * * *', $$select public.call_fn('lotto', 150000)$$);
+
+select cron.schedule('picks-more', '43 */2 * * *', $$select public.call_fn('picks2', 150000)$$);

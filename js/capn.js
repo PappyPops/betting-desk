@@ -1,7 +1,8 @@
-import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611191919';
+import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611191935';
 
 const LGS = [['nfl', 'NFL'], ['cfb', 'College'], ['nba', 'NBA']];
-const SRC = { action: 'Action', docs: 'Doc’s', espn: 'ESPN', cbs: 'CBS' };
+const SRC = { action: 'Action', docs: 'Doc’s', espn: 'ESPN', cbs: 'CBS', pickswise: 'Pickswise', covers: 'Covers', dimers: 'Dimers', espnmodel: 'ESPN' };
+const MODEL = new Set(['covers', 'dimers', 'espnmodel']); // computer picks, not people
 const MKT = (t) => /^spread/.test(t) ? 'sp' : /^ml/.test(t) ? 'ml' : ['over', 'under'].includes(t) ? 'tot' : null;
 const MKN = { sp: 'Spread', tot: 'Total', ml: 'Moneyline' };
 const median = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : null; };
@@ -69,7 +70,7 @@ export async function render(el) {
 
     const pickRow = (k) => { const e = experts.get(k.expert_id); const u = e?.record?.units_net;
       return `<div class="row" style="justify-content:space-between;padding:5px 0;border-top:1px solid var(--line);font-size:13px">
-        <span><span class="chip" style="font-size:10.5px;padding:0 6px">${SRC[k.source] ?? k.source}</span> <b>${esc(e?.name ?? 'Handicapper')}</b> <span class="dim">${expRec(e)}${u !== null && u !== undefined && e?.record?.count ? ` · ${u >= 0 ? '+' : ''}${Number(u).toFixed(1)}u` : ''}</span></span>
+        <span><span class="chip" style="font-size:10.5px;padding:0 6px">${SRC[k.source] ?? k.source}${MODEL.has(k.source) ? ' model' : ''}</span> <b>${esc(e?.name ?? 'Handicapper')}</b> <span class="dim">${expRec(e)}${u !== null && u !== undefined && e?.record?.count ? ` · ${u >= 0 ? '+' : ''}${Number(u).toFixed(1)}u` : ''}</span></span>
         <span class="num">${esc(k.play)}${k.odds && k.source === 'action' ? ` <span class="dim">${odds(k.odds)}</span>` : ''}${k.units ? ` <span class="dim">${k.units}u</span>` : ''}</span></div>`; };
     const panelLine = (gid, g) => { const p = panel.get(gid); if (!p) return ''; const n = p.home + p.away; const lead = p.home >= p.away ? 'home' : 'away';
       return `<div class="dim" style="font-size:12.5px;margin-top:8px">ESPN panel: <b class="muted">${p[lead]} of ${n}</b> pick ${esc(g.data[lead].short)} to win</div>`; };
@@ -78,12 +79,13 @@ export async function render(el) {
     <div class="ph"><div><div class="kicker">Handicapper overlap</div><h1>Cap’n Cash</h1><p>Public handicapper cards stacked by game. A side is <b>loud</b> when 3 or more handicappers are on it, ignoring half-point differences.</p></div>
       <div class="row"><span class="stamp">Cards ${esc(ago(at))}</span><button class="btn" data-act="refresh">↻ Refresh</button></div></div>
     ${howTo('How it works', `<ol>
-      <li>Picks come from Action Network’s public handicappers (every 30 minutes), CBS Sports’ expert picks against the spread (NFL, college), Doc’s Sports free picks, and ESPN’s NFL expert panel (every 2 hours).</li>
+      <li><b>Handicappers:</b> Action Network (every 30 minutes), CBS Sports’ experts against the spread (NFL, college), Pickswise’s experts (NFL, college, NBA), Doc’s Sports free picks, and ESPN’s NFL panel (every 2 hours).</li>
+      <li><b>Models</b> (marked “model”): the OddsShark computer on Covers (a predicted score for every game, turned into a spread and a total pick when it’s half a point or more off DraftKings), and the Dimers and ESPN win-chance models, which only pick a moneyline when they rate a side 3+ points higher than DraftKings’ price implies.</li>
       <li>ESPN’s panel only picks winners, not spreads, so it shows as its own line on each game and doesn’t count toward loud.</li>
       <li>Loud sides are graded after the final at the median number among the handicappers on it. CBS pickers show CBS’s own season record against the spread; Doc’s handicappers build a record here as their picks are graded.</li>
-      <li>Pickswise loads its picks in the browser, out of reach of the backend, so it isn’t included.</li></ol>`, 'capn')}
+      <li>Every source is graded here after the final, so the Handicappers tab shows who actually wins. SportsLine and Covers’ own experts sit behind a login or load in the browser, so they aren’t included.</li></ol>`, 'capn')}
     <div class="grid g4" style="margin-bottom:14px">
-      <div class="card stat"><div class="k">Handicappers</div><div class="v num">${experts.size}</div><div class="s">Action, CBS, Doc’s, ESPN</div></div>
+      <div class="card stat"><div class="k">Handicappers</div><div class="v num">${experts.size}</div><div class="s">Action, CBS, Pickswise, Doc’s, ESPN + 3 models</div></div>
       <div class="card stat"><div class="k">Open picks</div><div class="v num">${open.length}</div><div class="s">${esc(LGS.find((x) => x[0] === st.lg)[1])}, not yet played</div></div>
       <div class="card stat"><div class="k">Loudest stack</div><div class="v num">${loud[0] ? loud[0].picks.length : '—'}</div><div class="s">${loud[0] ? esc(sideLabel(games.get(loud[0].gid), loud[0].mk, loud[0].side) + ' · ' + MKN[loud[0].mk]) : 'needs 3 on one side'}</div></div>
       <div class="card stat"><div class="k">Popular record</div><div class="v num">${lw + ll ? `${lw}–${ll}${lp ? '–' + lp : ''}` : '—'}</div><div class="s">loud sides, finals only</div></div>
