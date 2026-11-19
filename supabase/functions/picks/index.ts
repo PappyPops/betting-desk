@@ -59,11 +59,11 @@ async function cbs(lg: string) {
   const ex = new Map<number, any>(), picks: any[] = [];
   const re = /<a href="\/[a-z-]+\/teams\/([A-Z0-9]+)\/([a-z0-9-]+)\/"[^>]*>(?:(?!<\/td>).)*?data-config='(\{[^']*\})'(?:(?!<\/td>).)*?BetButton-text">\s*([^<]+?)\s*</g;
   for (const m of html.matchAll(re)) {
-    let cfg: any; try { cfg = JSON.parse(m[4].replace(/&quot;/g, '"')); } catch { continue; }
+    let cfg: any; try { cfg = JSON.parse(m[3].replace(/&quot;/g, '"')); } catch { continue; }
     const who = cfg?.meta?.bets?.[0]?.expertLabel; if (!who) continue;
     const pos = Number(cfg.meta.bets[0].position);
     if (pos && !names[pos - 1]) names[pos - 1] = who;
-    const slug = norm(m[2]), abbr = m[1].toLowerCase(), label = m[5].trim();
+    const slug = norm(m[2]), abbr = m[1].toLowerCase(), label = m[4].trim();
     const cand = games.filter((g: any) => { const t = new Date(g.start_time).getTime(); return t > now - 6 * 3600e3 && [g.data?.home, g.data?.away].some((d: any) => d && (norm(d.name) === slug || norm(d.abbr) === abbr)); })
       .sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
     const g: any = cand[0]; if (!g) continue;
