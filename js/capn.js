@@ -1,4 +1,4 @@
-import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611201523';
+import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611201524';
 
 const LGS = [['nfl', 'NFL'], ['cfb', 'College'], ['nba', 'NBA']];
 const SRC = { action: 'Action', docs: 'Doc’s', espn: 'ESPN', cbs: 'CBS', pickswise: 'Pickswise', covers: 'Covers', dimers: 'Dimers', espnmodel: 'ESPN' };
@@ -47,7 +47,7 @@ export async function render(el) {
     if (e.source === 'cbs') { const c = cbsRec.get(`${e.id}|${lg}`); return c ? { long: { w: c.season_w, l: c.season_l, p: c.season_p }, longLab: 'season ATS', l30: c.l30_w !== null ? { w: c.l30_w, l: c.l30_l, p: c.l30_p } : null, l30Lab: 'L30' } : { long: er, longLab: 'season ATS', l30: null }; }
     if (e.source === 'action') return { long: null, l30: er, l30Lab: 'L30' };
     const s30 = settled30(e.id), started = since[e.source], full = started && Date.now() - new Date(started).getTime() >= 30 * 86400e3;
-    return { long: er, longLab: e.source === 'espn' ? 'season, to win' : 'tracked here', l30: s30.w + s30.l + s30.p ? s30 : null, l30Lab: full ? 'L30' : `since ${new Date(started).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` };
+    return { long: e.source === 'espn' || full ? er : null, longLab: e.source === 'espn' ? 'season, to win' : 'tracked here', l30: s30.w + s30.l + s30.p ? s30 : null, l30Lab: full ? 'L30' : `since ${new Date(started).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` };
   }
   // hot = 60%+ over enough games to mean something
   const hot = (R) => (R.l30 && R.l30.w + R.l30.l >= 10 && rp(R.l30) >= 0.6) || (R.long && R.long.w + R.long.l >= 30 && rp(R.long) >= 0.6);
