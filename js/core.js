@@ -19,7 +19,7 @@ export async function blob(key, ttl = 30 * 60_000) {
   return rows[0] ?? null;
 }
 
-const GAME_COLS = 'id,league,season,week,start_time,state,home,away,home_score,away_score,open_spread_home,open_total,open_ml_home,open_ml_away,spread_home,total,ml_home,ml_away,close_spread_home,close_total,close_ml_home,close_ml_away,updated_at,data';
+const GAME_COLS = 'id,league,season,week,start_time,state,home,away,home_score,away_score,open_spread_home,open_total,open_ml_home,open_ml_away,spread_home,total,ml_home,ml_away,close_spread_home,close_total,close_ml_home,close_ml_away,first_seen,updated_at,data';
 export async function games({ league, from, to, extra = '' , ttl = 60_000}) {
   let q = `games?select=${GAME_COLS}&league=eq.${league}&order=start_time.asc`;
   if (from) q += `&start_time=gte.${encodeURIComponent(from)}`;

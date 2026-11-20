@@ -1,7 +1,7 @@
-import { games, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611192337';
-import { flagNow, loadFlags, gradeFlags, TRIG, historyNote } from './moves.js?v=202611192337';
-import { trackBtn } from './mybets.js?v=202611192337';
-import { nflHist } from './hist.js?v=202611192337';
+import { games, api, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611200332';
+import { flagNow, loadFlags, gradeFlags, TRIG, historyNote, SNAPS_FROM } from './moves.js?v=202611200332';
+import { trackBtn } from './mybets.js?v=202611200332';
+import { nflHist } from './hist.js?v=202611200332';
 
 // Totals rules written up front (not mined from the data), then checked on two separate halves of history.
 export const CUTS = [
@@ -27,13 +27,19 @@ export function grade(list, side) {
 const recTxt = (r) => r.w + r.l ? `${r.w}–${r.l}${r.p ? '–' + r.p : ''}` : '—';
 
 export async function render(el) {
-  const st = { lg: store.get('ll:lg', 'nfl'), view: 'board' };
-  let rows = [], hist = null, flagRec = null;
+  const st = { lg: store.get('ll:lg', 'nfl'), view: 'board', sort: store.get('ll:sort', 'time') };
+  let rows = [], hist = null, flagRec = null, opened = new Map();
 
   async function load() {
     el.innerHTML = '<div class="loading">Pulling the book…</div>';
     const seasonStart = st.lg === 'nba' ? '2026-10-01' : '2026-08-01';
     rows = await games({ league: st.lg, from: seasonStart, ttl: 90_000 });
+    // when each game's line first showed up: the first saved line change, or when the game was first seen if its line predates the line history
+    try {
+      const up = rows.filter((g) => g.state === 'pre').map((g) => g.id);
+      const from = new Date(SNAPS_FROM).getTime() + 30 * 60e3;
+      for (let i = 0; i < up.length; i += 150) for (const r of await api(`line_opened?select=game_id,opened&game_id=in.(${up.slice(i, i + 150).join(',')})`, { ttl: 300_000 })) opened.set(String(r.game_id), new Date(r.opened).getTime() > from ? r.opened : null);
+    } catch (_) { /* sort falls back to first seen */ }
     if (st.lg === 'nfl' && !hist) hist = await nflHist();
     draw();
     // grade the move signal across all three leagues (doesn't hold up the page)
@@ -88,12 +94,16 @@ export async function render(el) {
       </table></div></div>`;
     }
 
-    const board = moved.sort((a, b) => new Date(a.g.start_time) - new Date(b.g.start_time)).map(({ g, mv }) => {
+    const openedAt = (g) => { const o = opened.get(String(g.id)); return new Date(o ?? g.first_seen ?? g.start_time).getTime(); };
+    const trigT = TRIG[st.lg].tot;
+    const boardScore = ({ g, mv }) => Math.abs(mv || 0) / trigT + (liveCuts.get(g.id) || []).length;
+    const SORTS = { time: (a, b) => new Date(a.g.start_time) - new Date(b.g.start_time), signal: (a, b) => boardScore(b) - boardScore(a), move: (a, b) => Math.abs(b.mv || 0) - Math.abs(a.mv || 0), new: (a, b) => openedAt(b.g) - openedAt(a.g) };
+    const board = moved.sort(SORTS[st.sort] || SORTS.time).map(({ g, mv }) => {
       const d = g.data, cuts = liveCuts.get(g.id) || [];
       const big = Math.abs(mv) >= (st.lg === 'nba' ? 3 : 2);
       return `<tr style="${cuts.length ? 'box-shadow:inset 3px 0 0 var(--gold)' : ''}">
         <td><div class="team">${logo(d.away)}<span>${esc(d.away.short)}</span></div><div class="team" style="margin-top:3px">${logo(d.home)}<span>${d.neutral ? 'vs' : '@'} ${esc(d.home.short)}</span></div></td>
-        <td class="muted" style="font-size:13px">${esc(fmtDay(g.start_time))}<br>${esc(fmtTime(g.start_time))}</td>
+        <td class="muted" style="font-size:13px">${esc(fmtDay(g.start_time))}<br>${esc(fmtTime(g.start_time))}${st.sort === 'new' ? `<div class="dim" style="font-size:11.5px">line up ${opened.get(String(g.id)) ? `${esc(fmtDay(opened.get(String(g.id))))} ${esc(fmtTime(opened.get(String(g.id))))}` : 'before Nov 17'}</div>` : ''}</td>
         <td class="r num disp" style="font-size:20px">${g.open_total ?? '—'}</td>
         <td class="r num disp" style="font-size:20px">${g.total ?? '—'}</td>
         <td class="r num ${big ? (mv > 0 ? 'gold' : 'clay') : 'dim'}">${mv ? sgn(mv) : '0'}</td>
@@ -104,7 +114,11 @@ export async function render(el) {
     const team = (g, side) => g.data?.[side]?.short ?? (side === 'home' ? g.home : g.away);
     const pick = (g, f, n) => f.mk === 'tot' ? `${f.side === 'over' ? 'Over' : 'Under'} ${n}` : `${team(g, f.side)} ${line(n)}`;
     const movers = rows.filter((g) => g.state === 'pre' && new Date(g.start_time).getTime() > now + 3600e3 && new Date(g.start_time).getTime() < now + 8 * 86400e3)
-      .flatMap((g) => flagNow(g).map((f) => ({ g, f }))).sort((a, b) => b.f.move - a.f.move);
+      .flatMap((g) => flagNow(g).map((f) => ({ g, f })));
+    // signal strength: how far past the trigger it has moved, plus history backing it; flags history says not to chase go last
+    const flagScore = ({ g, f }) => { const h = historyNote(st.lg, f); return f.move / TRIG[st.lg][f.mk] + (h?.tone === 'mint' ? 2 : 0) - (h?.tone === 'clay' ? 100 : 0); };
+    const MS = { time: (a, b) => new Date(a.g.start_time) - new Date(b.g.start_time) || flagScore(b) - flagScore(a), signal: (a, b) => flagScore(b) - flagScore(a), move: (a, b) => b.f.move - a.f.move, new: (a, b) => openedAt(b.g) - openedAt(a.g) };
+    movers.sort(MS[st.sort] || MS.signal);
     const fr = (k) => flagRec?.[k];
     const recCell = (b) => b && b.n ? `${b.w}–${b.l}${b.p ? '–' + b.p : ''}<div class="dim" style="font-size:12px">${pct(b.w + b.l ? b.w / (b.w + b.l) : null, 1)}</div>` : '—';
     const clvCell = (b) => b && b.n ? `${b.beat} of ${b.n}<div class="dim" style="font-size:12px">${b.same} same · ${b.back} came back</div>` : '—';
@@ -127,9 +141,10 @@ export async function render(el) {
     ${howTo('How to read it', `<ol>
       <li><b>Moving lines</b> flags any total or spread that has moved far enough from the opener, with the number to get and where to stop chasing it. The table under it grades every flag.</li>
       <li><b>Season</b> shows how finals landed against the closing total and the opener. A market that’s right should split about 50/50.</li>
+      <li><b>Sort</b> applies to both lists. Strongest signal ranks how far a line has moved past the flag trigger, adds weight when NFL history backs the move or a cut that holds applies, and puts moves history says not to chase last. Newest line shows when each line first appeared, so you can catch openers early.</li>
       <li><b>Board</b> lists every upcoming total with its open, the number now, and the move. Big moves are highlighted. A gold edge means a cut that holds applies to that game.</li>
       <li><b>Cuts</b> (NFL) are simple rules checked on two separate halves of history. The old version mined patterns on past seasons and went 16–22 this year; these have to survive both halves before they light up.</li></ol>`, 'll')}
-    <div class="row" style="margin-bottom:14px">${seg('lg', [['nfl', 'NFL'], ['cfb', 'College'], ['nba', 'NBA']], st.lg)}</div>
+    <div class="row" style="margin-bottom:14px;gap:8px;flex-wrap:wrap">${seg('lg', [['nfl', 'NFL'], ['cfb', 'College'], ['nba', 'NBA']], st.lg)}<span class="row" style="gap:6px"><span class="dim" style="font-size:13px">Sort</span>${seg('sort', [['time', 'Start time'], ['signal', 'Strongest signal'], ['move', 'Biggest move'], ['new', 'Newest line']], st.sort)}</span></div>
     <div class="grid g4">
       <div class="card stat"><div class="k">Measured</div><div class="v num">${finals.length}</div><div class="s">finals with a closing total</div></div>
       <div class="card stat"><div class="k">Vs the close</div><div class="v num">${vClose.o}–${vClose.u}${vClose.p ? '–' + vClose.p : ''}</div><div class="s">over–under${vClose.p ? '–push' : ''}</div></div>
@@ -144,7 +159,8 @@ export async function render(el) {
     ${cutHtml}
     ${footNote(`Lines: DraftKings via ESPN, checked every 5 minutes. ${st.lg === 'nfl' ? 'History: nflverse closing totals, 2002–2025.' : ''} Not a promise.`)}`;
 
-    onSeg(el, 'lg', (v) => { st.lg = v; store.set('ll:lg', v); load(); });
+    onSeg(el, 'lg', (v) => { st.lg = v; store.set('ll:lg', v); opened = new Map(); load(); });
+    onSeg(el, 'sort', (v) => { st.sort = v; store.set('ll:sort', v); draw(); });
     el.querySelector('[data-act=refresh]').onclick = () => { clearCache(); load(); };
     wireHow(el);
   }

@@ -1,4 +1,4 @@
-import { api, esc, seg, onSeg, store, pct, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, decOdds } from './core.js?v=202611192337';
+import { api, esc, seg, onSeg, store, pct, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, decOdds } from './core.js?v=202611200332';
 
 const LGS = [['nfl', 'NFL'], ['cfb', 'College'], ['nba', 'NBA']];
 const MK = { sp: 'Spread', tot: 'Total', ml: 'Moneyline' };
