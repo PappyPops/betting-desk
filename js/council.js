@@ -267,8 +267,12 @@ function render_(date, files, ledger){
   if (fcp && fcp.length){
     const fcRes = [];
     $("finalgrid").innerHTML = fcp.map(p=>{
-      let res = ledger.rows.find(r=>r.date===date && r.fc && norm(r.pick)===norm(p.selection)) ||
-                ledger.rows.find(r=>r.date===date && /final/i.test(r.member) && norm(r.pick)===norm(p.selection));
+      const n = norm(p.selection);
+      const lastNum = s => (String(s||"").match(/[+\-]?\d+(?:\.\d+)?(?!.*\d)/) || [null])[0];
+      const loose = r => (norm(r.pick).includes(n) || n.includes(norm(r.pick))) && lastNum(r.pick) === lastNum(p.selection);
+      let res = ledger.rows.find(r=>r.date===date && r.fc && norm(r.pick)===n) ||
+                ledger.rows.find(r=>r.date===date && r.fc && loose(r)) ||
+                ledger.rows.find(r=>r.date===date && /final/i.test(r.member) && norm(r.pick)===n);
       // Final Card picks are always 1 unit, even when the picker made it a 2U play
       if (res && rc(res)) {
         const o = parseInt(String(p.odds||res.odds||"").replace(/[^\d+\-]/g,""), 10), x = rc(res);
