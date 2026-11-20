@@ -45,16 +45,23 @@ Deno.serve(async () => {
   const done: any[] = [];
   for (const ev of sbd.events ?? []) {
     const c = ev.competitions?.[0]; const s = c?.status ?? ev.status; const name = s?.type?.name ?? '';
-    const atBreak = (name === 'STATUS_HALFTIME' || name === 'STATUS_END_PERIOD') && s.period >= 1 && s.period <= 3;
+    // ESPN often skips STATUS_END_PERIOD at the 1st/3rd quarter breaks or shows it for under a minute, so also take
+    // the snapshot at 0:00 of a quarter, or (late) in the first minute of the next one, flagged so it can be told apart.
+    const live = s?.type?.state === 'in', clock = Number(s?.clock ?? -1);
+    let brk: number | null = null, late = false;
+    if (name === 'STATUS_HALFTIME' || name === 'STATUS_END_PERIOD') brk = s.period;
+    else if (live && clock === 0) brk = s.period;
+    else if (live && s.period >= 2 && s.period <= 4 && clock >= 840) { brk = s.period - 1; late = true; }
+    if (brk !== null && (brk < 1 || brk > 3)) brk = null;
     const final = s?.type?.state === 'post';
-    if (!atBreak && !final) continue;
-    const period = final ? 4 : s.period;
+    if (brk === null && !final) continue;
+    const period = final ? 4 : brk!;
     if (final && Date.now() - new Date(ev.date).getTime() > 2 * 86400e3) continue;
     const { data: have } = await sb.from('whistle_snaps').select('period').eq('game_id', ev.id).eq('period', period);
     if (have?.length) continue;
     const home = c.competitors.find((t: any) => t.homeAway === 'home'), away = c.competitors.find((t: any) => t.homeAway === 'away');
     const sum = await j(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${ev.id}`);
-    const row = { game_id: ev.id, period, ts: new Date().toISOString(), home_pts: n(home?.score), away_pts: n(away?.score), box: parseBox(sum), live: final ? null : await liveProps(ev.id) };
+    const row = { game_id: ev.id, period, ts: new Date().toISOString(), home_pts: n(home?.score), away_pts: n(away?.score), box: parseBox(sum), live: final ? null : await liveProps(ev.id), late };
     await sb.from('whistle_snaps').upsert(row);
     done.push({ id: ev.id, period, players: Object.keys(row.box).length, live: row.live?.length ?? 0 });
   }

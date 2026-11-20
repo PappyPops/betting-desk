@@ -1,9 +1,9 @@
 // At the Whistle: NFL live player props at the end of Q1, halftime and the end of Q3. Each ticket is the projected
 // final against the line at that moment, locked at the whistle and graded on the final box score.
-import { api, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611200424';
-import { STATS, TYPE_GROUP, propData, project, atWhistle, boxVal, calibrate } from './propmodel.js?v=202611200424';
-import { trackBtn } from './mybets.js?v=202611200424';
-import { ncdf } from './core.js?v=202611200424';
+import { api, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611200503';
+import { STATS, TYPE_GROUP, propData, project, atWhistle, boxVal, calibrate } from './propmodel.js?v=202611200503';
+import { trackBtn } from './mybets.js?v=202611200503';
+import { ncdf } from './core.js?v=202611200503';
 
 const QN = { 1: 'End Q1', 2: 'Halftime', 3: 'End Q3' };
 const NEED = { over: 0.6, under: 0.58 }; // overs need more of an edge than unders
@@ -55,7 +55,8 @@ export async function tickets() {
       const now = boxVal(b, p.stat);
       const long = STATS[p.stat].long ? b[STATS[p.stat].long] || 0 : 0;
       const m = atWhistle({ stat: p.stat, prior, now, long, period: q, lead });
-      const live = liveLine(s, p.athlete_id, p.stat);
+      // a live number identical to the pregame close usually means the book froze that market, not that it priced it again
+      const lv0 = liveLine(s, p.athlete_id, p.stat), live = lv0 !== null && lv0 === pre ? null : lv0;
       const ln = live ?? pre, src = live !== null ? 'live' : 'pregame';
       if (now > ln) continue; // already over: nothing left to bet
       const pOver = STATS[p.stat].count ? (() => { let c = 0, t = Math.exp(-m.remaining); for (let k = 0; k <= Math.floor(ln - now); k++) { c += t; t *= m.remaining / (k + 1); } return 1 - c; })()
@@ -117,7 +118,7 @@ export async function render(el) {
       <li><b>One long play doesn’t set the pace.</b> Anything past 25 yards on his longest catch or run is left out of the pace.</li>
       <li><b>Game script:</b> down 10+ in the second half, passing and catching go up and rushing goes down; up 10+, the reverse.</li>
       <li><b>Tickets</b> need a 60% chance for an over and 58% for an under. An under with almost no game left isn’t a ticket.</li>
-      <li><b>The line:</b> DraftKings’ live prop line at the whistle when ESPN’s feed has one; otherwise the pregame line. Those are graded separately. Halftime records against the pregame line run high because the book would have moved; only the live-line record is a real betting record.</li></ol>`, 'wh')}
+      <li><b>The line:</b> DraftKings’ live prop line at the whistle when ESPN’s feed has one and it has moved off the pregame number (an unmoved number usually means the market was frozen); otherwise the pregame line. Those are graded separately. Halftime records against the pregame line run high because the book would have moved; only the live-line record is a real betting record.</li></ol>`, 'wh')}
     <div class="grid g4">
       <div class="card stat"><div class="k">Season</div><div class="v num">${rt(all)}</div><div class="s">${pct(rp(all), 1)} · ${st.src === 'live' ? 'live lines' : st.src === 'pregame' ? 'pregame lines' : 'all lines'}</div></div>
       <div class="card stat"><div class="k">Over</div><div class="v num">${rt(tally(graded.filter((t) => t.side === 'over')))}</div><div class="s">${pct(rp(tally(graded.filter((t) => t.side === 'over'))), 0)}</div></div>
