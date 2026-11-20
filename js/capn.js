@@ -1,4 +1,4 @@
-import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611201526';
+import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611201527';
 
 const LGS = [['nfl', 'NFL'], ['cfb', 'College'], ['nba', 'NBA']];
 const SRC = { action: 'Action', docs: 'Doc’s', espn: 'ESPN', cbs: 'CBS', pickswise: 'Pickswise', covers: 'Covers', dimers: 'Dimers', espnmodel: 'ESPN' };
@@ -53,7 +53,7 @@ export async function render(el) {
   // ESPN's panel picks straight-up winners, where 65% just means picking favorites, so it never counts as hot
   const hot = (R) => !R.su && ((R.l30 && R.l30.w + R.l30.l >= 10 && rp(R.l30) >= 0.6) || (R.long && R.long.w + R.long.l >= 30 && rp(R.long) >= 0.6));
   const star = (id) => `<button class="btn" data-follow="${id}" title="${follows.has(String(id)) ? 'Unfollow' : 'Follow'}" style="padding:0 6px;font-size:13px;line-height:1.4;border:none;background:none;color:${follows.has(String(id)) ? 'var(--gold)' : 'var(--muted)'}">${follows.has(String(id)) ? '★' : '☆'}</button>`;
-  const recLine = (R) => [R.long ? `<span title="${esc(R.longLab)}">${rt(R.long)}</span>` : '', R.l30 ? `<span title="${esc(R.l30Lab)}">(${esc(R.l30Lab)}) <b class="${rp(R.l30) >= 0.6 && R.l30.w + R.l30.l >= 10 ? 'gold' : rp(R.l30) !== null && rp(R.l30) < 0.5 ? 'clay' : ''}">${rt(R.l30)}</b></span>` : ''].filter(Boolean).join(' ') || 'new';
+  const recLine = (R) => [R.long ? `<span title="${esc(R.longLab)}">${rt(R.long)}</span>` : '', R.l30 ? `<span title="${esc(R.l30Lab)}">(${esc(R.l30Lab)}) <b class="${!R.su && rp(R.l30) >= 0.6 && R.l30.w + R.l30.l >= 10 ? 'gold' : rp(R.l30) !== null && rp(R.l30) < 0.5 ? 'clay' : ''}">${rt(R.l30)}</b></span>` : ''].filter(Boolean).join(' ') || 'new';
   const sideLabel = (g, mk, side) => mk === 'tot' ? (side === 'over' ? 'Over' : 'Under') : (g?.data?.[side])?.short ?? side;
 
   function stacks(list) {
@@ -133,7 +133,7 @@ export async function render(el) {
       <div class="card" style="padding:4px 12px;overflow-x:auto"><table class="t"><tr><th>Handicapper</th><th>Source</th><th class="r">Record</th><th class="r">Last 30 days</th></tr>
       ${board.map(({ e, R }) => { const f = follows.has(String(e.id)), h = hot(R); return `<tr><td>${star(e.id)}<b class="${f || h ? 'gold' : ''}">${esc(e.name)}</b></td><td><span class="chip">${SRC[e.source] ?? e.source}</span></td>
         <td class="r num">${R.long ? `${rt(R.long)}<div class="dim" style="font-size:12px">${R.long.w + R.long.l ? Math.round(rp(R.long) * 100) + '% · ' : ''}${esc(R.longLab)}</div>` : '<span class="dim">—</span>'}</td>
-        <td class="r num">${R.l30 ? `<b class="${rp(R.l30) >= 0.6 && R.l30.w + R.l30.l >= 10 ? 'gold' : rp(R.l30) < 0.5 ? 'clay' : ''}">${rt(R.l30)}</b><div class="dim" style="font-size:12px">${R.l30.w + R.l30.l ? Math.round(rp(R.l30) * 100) + '% · ' : ''}${esc(R.l30Lab === 'L30' ? (e.source === 'action' ? 'last month, per Action' : e.source === 'cbs' ? 'last 5 CBS weeks' : 'graded here') : R.l30Lab)}</div>` : '<span class="dim">—</span>'}</td></tr>`; }).join('')}
+        <td class="r num">${R.l30 ? `<b class="${!R.su && rp(R.l30) >= 0.6 && R.l30.w + R.l30.l >= 10 ? 'gold' : rp(R.l30) < 0.5 ? 'clay' : ''}">${rt(R.l30)}</b><div class="dim" style="font-size:12px">${R.l30.w + R.l30.l ? Math.round(rp(R.l30) * 100) + '% · ' : ''}${esc(R.l30Lab === 'L30' ? (e.source === 'action' ? 'last month, per Action' : e.source === 'cbs' ? 'last 5 CBS weeks' : 'graded here') : R.l30Lab)}</div>` : '<span class="dim">—</span>'}</td></tr>`; }).join('')}
       </table></div></div>`}
     ${footNote('Picks: Action Network public handicappers, Doc’s Sports free picks, ESPN NFL expert picks. Not a promise, not advice.')}`;
 
