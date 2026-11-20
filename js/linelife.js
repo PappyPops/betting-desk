@@ -1,7 +1,7 @@
-import { games, api, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611201357';
-import { flagNow, loadFlags, gradeFlags, TRIG, historyNote, SNAPS_FROM } from './moves.js?v=202611201357';
-import { trackBtn } from './mybets.js?v=202611201357';
-import { nflHist } from './hist.js?v=202611201357';
+import { games, api, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611201358';
+import { flagNow, loadFlags, gradeFlags, TRIG, historyNote, SNAPS_FROM } from './moves.js?v=202611201358';
+import { trackBtn } from './mybets.js?v=202611201358';
+import { nflHist } from './hist.js?v=202611201358';
 
 // Totals rules written up front (not mined from the data), then checked on two separate halves of history.
 export const CUTS = [
@@ -131,7 +131,7 @@ export async function render(el) {
       if (conflict) p = Math.min(p, 0.5);
       return { p, why, strong: p >= 0.55 };
     };
-    const flagScore = (m) => { const h = historyNote(st.lg, m.f); return m.f.move / TRIG[st.lg][m.f.mk] + (chance(m).p - 0.5) * 40 - (h?.tone === 'clay' ? 100 : 0); };
+    const flagScore = (m) => { const h = historyNote(st.lg, m.f); return chance(m).p * 100 + m.f.move / TRIG[st.lg][m.f.mk] / 10 - (h?.tone === 'clay' ? 100 : 0); }; // win chance first, size of the move breaks ties
     const MS = { time: (a, b) => new Date(a.g.start_time) - new Date(b.g.start_time) || flagScore(b) - flagScore(a), signal: (a, b) => flagScore(b) - flagScore(a), move: (a, b) => b.f.move - a.f.move, new: (a, b) => openedAt(b.g) - openedAt(a.g) };
     movers.sort(MS[st.sort] || MS.signal);
     const fr = (k) => flagRec?.[k];
@@ -157,7 +157,7 @@ export async function render(el) {
     ${howTo('How to read it', `<ol>
       <li><b>Moving lines</b> flags any total or spread that has moved far enough from the opener, with the number to get and where to stop chasing it. The table under it grades every flag.</li>
       <li><b>Season</b> shows how finals landed against the closing total and the opener. A market that’s right should split about 50/50.</li>
-      <li><b>Sort</b> applies to both lists. Strongest signal ranks how far a line has moved past the flag trigger, adds weight when NFL history backs the move or a cut that holds applies, and puts moves history says not to chase last. Newest line shows when each line first appeared, so you can catch openers early.</li>
+      <li><b>Sort</b> applies to both lists. Strongest signal ranks by estimated win chance (gold first), then by how far the line has moved, and puts moves history says not to chase last. Newest line shows when each line first appeared, so you can catch openers early.</li>
       <li><b>Board</b> lists every upcoming total with its open, the number now, and the move. Big moves are highlighted. A gold edge means a cut that holds applies to that game.</li>
       <li><b>Cuts</b> (NFL) are simple rules checked on two separate halves of history. The old version mined patterns on past seasons and went 16–22 this year; these have to survive both halves before they light up.</li></ol>`, 'll')}
     <div class="row" style="margin-bottom:14px;gap:8px;flex-wrap:wrap">${seg('lg', [['nfl', 'NFL'], ['cfb', 'College'], ['nba', 'NBA']], st.lg)}<span class="row" style="gap:6px"><span class="dim" style="font-size:13px">Sort</span>${seg('sort', [['time', 'Start time'], ['signal', 'Strongest signal'], ['move', 'Biggest move'], ['new', 'Newest line']], st.sort)}</span></div>
