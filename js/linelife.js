@@ -1,7 +1,7 @@
-import { games, api, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611201358';
-import { flagNow, loadFlags, gradeFlags, TRIG, historyNote, SNAPS_FROM } from './moves.js?v=202611201358';
-import { trackBtn } from './mybets.js?v=202611201358';
-import { nflHist } from './hist.js?v=202611201358';
+import { games, api, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611201415';
+import { flagNow, loadFlags, gradeFlags, TRIG, historyNote, SNAPS_FROM } from './moves.js?v=202611201415';
+import { trackBtn } from './mybets.js?v=202611201415';
+import { nflHist } from './hist.js?v=202611201415';
 
 // Totals rules written up front (not mined from the data), then checked on two separate halves of history.
 export const CUTS = [
@@ -128,6 +128,9 @@ export async function render(el) {
         if (c.side !== f.side) { conflict = true; why.push(`${c.name} cut leans ${c.side}`); continue; }
         const q = shrink(c.a.w + c.b.w, c.a.l + c.b.l); if (q > p) p = q; why.push(`${c.name} cut`);
       }
+      // this tool's own graded flags for this league and market (frozen when they fired, Nov 16 on) count too
+      const own = flagRec?.[`${st.lg}:${f.mk}`];
+      if (own && own.w + own.l >= 30) { const q = shrink(own.w, own.l); if (q > p) { p = q; why.push(`these flags are ${own.w}–${own.l} so far`); } }
       if (conflict) p = Math.min(p, 0.5);
       return { p, why, strong: p >= 0.55 };
     };
