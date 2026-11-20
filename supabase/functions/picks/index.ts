@@ -85,7 +85,30 @@ async function cbs(lg: string) {
     const r = recs[e._pos - 1]; delete e._pos;
     if (r && recs.length === names.filter(Boolean).length) { const [w, l, pu] = r.split('-').map(Number); e.record = { win: w, loss: l, push: pu || 0, count: w + l + (pu || 0), units_net: w * 0.909 - l, window: 'season, against the spread' }; e.record_text = `${r} ATS (CBS)`; }
   }
+  try { await cbsRecords(lg, html); } catch (e) { console.log('cbs records', String(e)); }
   return { ex: [...ex.values()], picks };
+}
+
+// Each CBS week page lists every expert's name and overall record (cumulative through that week), in column order.
+// Last 30 days = overall now minus overall five weeks back (the current week plus the four before it).
+function cbsHeader(html: string) {
+  const names = [...html.matchAll(/AuthorHeadshotAndName-firstName">([^<]*)<\/span>\s*<span class="AuthorHeadshotAndName-lastName">([^<]*)</g)].map((m) => `${m[1]} ${m[2]}`.trim());
+  const recs = [...html.matchAll(/overallRecords">\s*Overall:\s*(\d+)-(\d+)(?:-(\d+))?/gi)].map((m) => [Number(m[1]), Number(m[2]), Number(m[3] || 0)]);
+  if (!recs.length || names.length < recs.length) return new Map<string, number[]>();
+  const nm = names.slice(0, recs.length);
+  return new Map(nm.map((n, i) => [n.toLowerCase(), recs[i]]));
+}
+async function cbsRecords(lg: string, html: string) {
+  const weeks = [...html.matchAll(/\/picks\/experts\/(?:straight-up|against-the-spread)\/(\d+)\//g)].map((m) => Number(m[1]));
+  const cur = Math.max(0, ...weeks); if (!cur) return;
+  const now = cbsHeader(html); if (!now.size) return;
+  const backWk = cur - 5;
+  const back = backWk >= 1 ? cbsHeader((await text(`https://www.cbssports.com/${CBS[lg]}/picks/experts/against-the-spread/${backWk}/`, BROWSER)).replace(/\s+/g, ' ')) : new Map<string, number[]>();
+  const rows = [...now.entries()].map(([n, r]) => {
+    const b = backWk >= 1 ? back.get(n) : [0, 0, 0];
+    return { expert_id: hid('cbs:' + n), league: lg, season_w: r[0], season_l: r[1], season_p: r[2], l30_w: b ? r[0] - b[0] : null, l30_l: b ? r[1] - b[1] : null, l30_p: b ? r[2] - b[2] : null, l30_from: b ? `week ${Math.max(1, backWk + 1)}` : null, updated_at: new Date().toISOString() };
+  });
+  await sb.from('cbs_records').upsert(rows);
 }
 
 // ---------- Doc's Sports free picks (one article per game) ----------
