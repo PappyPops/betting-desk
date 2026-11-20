@@ -1,10 +1,10 @@
 // Best bets: every tool's current reads on the same games, weighted by how each tool has actually done on games
 // it hadn't seen yet. A source with no record, or a record under break-even, gets no weight.
-import { api, games } from './core.js?v=202611200332';
-import { matrixData } from './matrix.js?v=202611200332';
-import { RESEARCH, BREAK_EVEN } from './research.js?v=202611200332';
-import { CUTS, grade as cutGrade } from './linelife.js?v=202611200332';
-import { flagNow, loadFlags, gradeFlags, historyNote } from './moves.js?v=202611200332';
+import { api, games } from './core.js?v=202611200341';
+import { matrixData } from './matrix.js?v=202611200341';
+import { RESEARCH, BREAK_EVEN } from './research.js?v=202611200341';
+import { CUTS, grade as cutGrade } from './linelife.js?v=202611200341';
+import { flagNow, loadFlags, gradeFlags, historyNote } from './moves.js?v=202611200341';
 
 const BE = 110 / 210;
 const K = 150; // shrink each record toward break-even as if it had 150 more games at exactly break-even
@@ -48,10 +48,10 @@ export async function bestBets() {
     sources.push(src);
     for (const g of mx.upcoming.NFL) { const m = r.pick(g); if (m) add(src, g.espn, m.kind === 'teaser' ? 'teaser' : m.kind === 'total' ? 'tot' : m.kind === 'moneyline' ? 'ml' : 'sp', m.side); }
   }
-  // 2. Grok's badged systems, judged on games since they were found
+  // 2. Matrix badged systems, judged on games since they were found
   for (const lg of ['NFL', 'NCAAF']) {
     const b = mx.sinceBadged[lg];
-    const src = { id: `grok-${lg}`, name: `Grok’s badged ${lg === 'NFL' ? 'NFL' : 'college'} systems`, short: 'Matrix', w: b.w, l: b.l, edge: edgeOf(b.w, b.l), note: `badged plays since found ${b.w}–${b.l}` };
+    const src = { id: `matrix-${lg}`, name: `Matrix badged ${lg === 'NFL' ? 'NFL' : 'college'} systems`, short: 'Matrix', w: b.w, l: b.l, edge: edgeOf(b.w, b.l), note: `badged plays since found ${b.w}–${b.l}` };
     sources.push(src);
     for (const { g, hits } of mx.boards[lg]) {
       const seen = new Set();

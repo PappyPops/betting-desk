@@ -1,4 +1,4 @@
-// Rule engine for the Matrix systems (a faithful port of the Grok workspace's mine_angles.py / build-matrix.py).
+// Rule engine for the Matrix systems (a faithful port of the original mine_angles.py / build-matrix.py).
 // A system key reads: tier - [fade] - role - bucket - filters... - market, e.g. m-fade-away_dog-ge5-loss7-cold-late-ats.
 
 export const NFL_CONF = {

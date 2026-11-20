@@ -1,10 +1,10 @@
-import { games as loadGames, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, logo } from './core.js?v=202611200332';
-import { nflHist } from './hist.js?v=202611200332';
-import { makeContext, parseSystem, matchSystem, gradePick, pickLabel } from './systems.js?v=202611200332';
-import { RESEARCH, gradeResearch, researchLabel, BREAK_EVEN, nbaGames } from './research.js?v=202611200332';
+import { games as loadGames, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, logo } from './core.js?v=202611200341';
+import { nflHist } from './hist.js?v=202611200341';
+import { makeContext, parseSystem, matchSystem, gradePick, pickLabel } from './systems.js?v=202611200341';
+import { RESEARCH, gradeResearch, researchLabel, BREAK_EVEN, nbaGames } from './research.js?v=202611200341';
 
-const NFL_IN_RECORD = (g) => g.season < 2026 || (g.season === 2026 && g.week <= 9); // Grok's NFL records run through 2026 week 9
-const CFB_FROM_WEEK = 5; // Grok's college records run through 2026 week 4
+const NFL_IN_RECORD = (g) => g.season < 2026 || (g.season === 2026 && g.week <= 9); // original NFL records run through 2026 week 9
+const CFB_FROM_WEEK = 5; // original college records run through 2026 week 4
 const rec = (r) => r.w + r.l ? `${r.w}–${r.l}${r.p ? '–' + r.p : ''}` : '—';
 const rate = (r) => r.w + r.l ? r.w / (r.w + r.l) : null;
 const BE = 110 / 210;
@@ -65,7 +65,7 @@ async function buildMatrix() {
   const systems = file.systems.map((s) => ({ ...s, parsed: parseSystem(s) }));
   const caches = { NFL: new Map(), NCAAF: new Map() };
 
-  // ---- self-check: rebuild every NFL record and compare with Grok's ----
+  // ---- self-check: rebuild every NFL record and compare with the original ----
   let exact = 0, close = 0, checked = 0;
   const nflIn = NG.filter((g) => g.final && NFL_IN_RECORD(g));
   for (const s of systems.filter((x) => x.league === 'NFL')) {
@@ -143,7 +143,7 @@ export async function render(el) {
       ${st.open === s.id ? `<tr><td colspan="3" style="background:var(--surface2)"><div class="muted" style="font-size:13px;margin-bottom:6px">${esc(s.rule)}</div>
         ${s.since.games.length ? `<div class="kicker" style="color:var(--muted);margin:6px 0">Since it was found</div>${s.since.games.slice(-12).reverse().map(({ g, m, gr }) => `<div style="font-size:12.5px">${esc(g.date)} · ${esc(g.away)} ${g.away_score} @ ${esc(g.home)} ${g.home_score} · ${esc(pickLabel(g, m))} <b class="${gr === 'win' ? 'mint' : gr === 'loss' ? 'clay' : ''}">${gr}</b></div>`).join('')}` : ''}
         <div class="kicker" style="color:var(--muted);margin:8px 0 4px">Recent games in the record</div>${(s.history || []).slice(0, 8).map((x) => `<div style="font-size:12.5px">${esc(x.date)} · ${esc(x.matchup)} · ${esc(x.pick)} <b class="${x.result === 'win' ? 'mint' : x.result === 'loss' ? 'clay' : ''}">${x.result}</b>${x.score ? ` <span class="dim">(${esc(x.score)})</span>` : ''}</div>`).join('')}
-        ${s.rebuilt ? `<div class="dim" style="font-size:12px;margin-top:6px">Rebuilt here from nflverse: ${rec(s.rebuilt)} (Grok’s file: ${rec(s.record)}).</div>` : ''}</td></tr>` : ''}`;
+        ${s.rebuilt ? `<div class="dim" style="font-size:12px;margin-top:6px">Rebuilt here from nflverse: ${rec(s.rebuilt)} (original record: ${rec(s.record)}).</div>` : ''}</td></tr>` : ''}`;
   }
 
   const resRec = (b) => b.w + b.l ? `${b.w}–${b.l}${b.p ? '–' + b.p : ''}` : '—';
@@ -171,21 +171,21 @@ export async function render(el) {
     const lib = systems.filter((s) => s.league === lg && (st.kind === 'all' || s.kind === st.kind) && (st.tier === 'all' || (st.tier === 'badged' ? s.qualified : !s.qualified)) && (!st.q || s.name.toLowerCase().includes(st.q.toLowerCase())))
       .sort((a, b) => (b.qualified - a.qualified) || ((b.rate ?? 0) - (a.rate ?? 0)));
     const sa = sinceAll[lg], sb = sinceBadged[lg];
-    const gb = file.grokBoards.filter((b) => b.league === lg);
+    const gb = file.boards.filter((b) => b.league === lg);
     const board = boards[lg];
 
     el.innerHTML = `
-    <div class="ph"><div><div class="kicker">${lg === 'NFL' ? 'NFL' : 'College'} systems</div><h1>Matrix</h1><p>Grok’s 464 situational systems, rebuilt rule for rule and matched to this week’s games, plus the test that matters: how they’ve done on games played after they were found.</p></div>
+    <div class="ph"><div><div class="kicker">${lg === 'NFL' ? 'NFL' : 'College'} systems</div><h1>Matrix</h1><p>464 situational systems, matched to this week’s games, plus the test that matters: how they’ve done on games played after they were found.</p></div>
       <button class="btn" data-act="refresh">↻ Refresh</button></div>
     <div class="card" style="border-color:#e0795a88;margin-bottom:14px"><b class="clay">Read this before betting a system.</b>
       <p class="muted" style="margin:6px 0 0">These were found by grading ${lg === 'NFL' ? '259,428 NFL' : '36,602 college'} combinations of situations and keeping the ones with the best past records. Search that many and hundreds will look great by luck alone. The only fair test is games played after a system was found. So far:</p>
       <div class="grid g4" style="margin-top:10px">
         <div class="stat"><div class="k">All plays since found</div><div class="v num ${rate(sa) !== null ? (rate(sa) > BE ? 'mint' : 'clay') : ''}">${rec(sa)}</div><div class="s">${pct(rate(sa), 1)} · ${lg === 'NFL' ? `week${nflWeeks.length > 1 ? 's' : ''} ${nflWeeks.join(', ') || '—'}` : `weeks ${cfbWeeks[0] ?? ''}–${cfbWeeks[cfbWeeks.length - 1] ?? ''}`}</div></div>
         <div class="stat"><div class="k">Badged plays since</div><div class="v num ${rate(sb) !== null ? (rate(sb) > BE ? 'mint' : 'clay') : ''}">${rec(sb)}</div><div class="s">${pct(rate(sb), 1)} · the 60%+ tier</div></div>
-        ${gb.map((b) => `<div class="stat"><div class="k">Grok’s ${esc(b.label)} board</div><div class="v num">${rec(b.all)}</div><div class="s">badged ${rec(b.badged)} · ${b.note.includes('inside the record') ? 'inside its own record' : 'after the record'}</div></div>`).join('')}
+        ${gb.map((b) => `<div class="stat"><div class="k">${esc(b.label)} board</div><div class="v num">${rec(b.all)}</div><div class="s">badged ${rec(b.badged)} · ${b.note.includes('inside the record') ? 'inside its own record' : 'after the record'}</div></div>`).join('')}
       </div>
-      <p class="dim" style="font-size:12.5px;margin:8px 0 0">Break-even at −110 is ${pct(BE, 1)}. ${lg === 'NFL' ? `Rebuild check: ${exact} of ${checked} NFL systems reproduce Grok’s record exactly, ${close} more within a few games.` : `College plays since found are graded at ESPN’s DraftKings closing line, on the ${after.NCAAF.length} games so far with a closing number (more are filled in each night). Previous-game situations only see games against FBS teams.`}</p></div>
-    <div class="row" style="margin-bottom:12px">${seg('lg', [['NFL', 'NFL'], ['NCAAF', 'College']], lg)} ${seg('tab', [['week', 'This week'], ['lib', 'Grok library'], ['research', 'Research systems']], st.tab)}</div>
+      <p class="dim" style="font-size:12.5px;margin:8px 0 0">Break-even at −110 is ${pct(BE, 1)}. ${lg === 'NFL' ? `Rebuild check: ${exact} of ${checked} NFL systems reproduce their original record exactly, ${close} more within a few games.` : `College plays since found are graded at ESPN’s DraftKings closing line, on the ${after.NCAAF.length} games so far with a closing number (more are filled in each night). Previous-game situations only see games against FBS teams.`}</p></div>
+    <div class="row" style="margin-bottom:12px">${seg('lg', [['NFL', 'NFL'], ['NCAAF', 'College']], lg)} ${seg('tab', [['week', 'This week'], ['lib', 'Systems library'], ['research', 'Research systems']], st.tab)}</div>
     ${st.tab === 'research' ? researchView() : st.tab === 'week' ? `<div class="grid g2">${board.map(({ g, hits, rhits, picks }) => {
         const lv = g.live, d = lv?.data;
         return `<div class="card ${picks[0] && picks[0][1].some((h) => h.s.qualified) ? 'hl' : ''}">
@@ -193,13 +193,13 @@ export async function render(el) {
           <div class="team" style="margin-top:8px">${d ? logo(d.away) : ''}<b>${esc(d?.away?.short ?? g.away)}</b></div><div class="team" style="margin-top:4px">${d ? logo(d.home) : ''}<b>${d?.neutral || g.neutral ? 'vs' : '@'} ${esc(d?.home?.short ?? g.home)}</b> <span class="dim">${g.home} ${g.home_spread > 0 ? '+' : ''}${g.home_spread} · O/U ${g.total ?? '—'}</span></div>
           ${picks.map(([label, hs]) => `<div style="margin-top:10px"><div class="row" style="justify-content:space-between"><b>${esc(label)}</b><span class="chip ${hs.some((h) => h.s.qualified) ? 'gold' : ''}">${hs.length}</span></div>
             ${hs.slice(0, 4).map((h) => `<div class="dim" style="font-size:12.5px;padding:3px 0;border-top:1px solid var(--line)">${h.s.qualified ? '<b class="gold">Badged</b> · ' : ''}${esc(h.s.name)} · ${rec(h.s.record)} · since: <span class="${h.s.since.w + h.s.since.l ? (rate(h.s.since) > BE ? 'mint' : 'clay') : ''}">${rec(h.s.since)}</span></div>`).join('')}
-            ${hs.length > 4 ? `<div class="dim" style="font-size:12px">+ ${hs.length - 4} more</div>` : ''}</div>`).join('') || '<div class="dim" style="font-size:12.5px;margin-top:8px">No Grok systems fit this game.</div>'}
+            ${hs.length > 4 ? `<div class="dim" style="font-size:12px">+ ${hs.length - 4} more</div>` : ''}</div>`).join('') || '<div class="dim" style="font-size:12.5px;margin-top:8px">No systems fit this game.</div>'}
           ${rhits.length ? `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--line2)"><div class="kicker" style="color:var(--sky);margin-bottom:4px">Research systems</div>${rhits.map((x) => `<div style="font-size:12.5px;padding:2px 0"><b>${esc(x.label)}</b> <span class="dim">· ${esc(x.r.name)} · since published ${resRec(x.r.after)}</span></div>`).join('')}</div>` : ''}
         </div>`; }).join('') || '<div class="empty">No games with lines yet.</div>'}</div>`
     : `<div class="row" style="margin-bottom:10px">${seg('kind', [['all', 'All'], ['spread', 'Spread'], ['total', 'Total'], ['moneyline', 'Moneyline']], st.kind)} ${seg('tier', [['all', 'All tiers'], ['badged', 'Badged'], ['library', 'Library']], st.tier)}
         <input data-act="q" placeholder="Search systems" value="${esc(st.q)}" style="min-width:200px"></div>
       <div class="card" style="padding:4px 12px;overflow-x:auto"><table class="t"><tr><th>${lib.length} systems · tap one for details</th><th class="r">Record</th><th class="r">Since found</th></tr>${lib.map(sysRow).join('')}</table></div>`}
-    ${footNote(`Systems and records: Grok workspace, as of ${esc(file.asOf)}. NFL history: nflverse closing lines. College since-found games: ESPN with DraftKings closing lines. Reference only, not a recommendation.`)}`;
+    ${footNote(`Systems and records as of ${esc(file.asOf)}. NFL history: nflverse closing lines. College since-found games: ESPN with DraftKings closing lines. Reference only, not a recommendation.`)}`;
 
     onSeg(el, 'lg', (v) => { st.lg = v; store.set('mx2:lg', v); st.open = null; draw(); });
     onSeg(el, 'tab', (v) => { st.tab = v; store.set('mx2:tab', v); draw(); });

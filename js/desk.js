@@ -1,6 +1,6 @@
-import { games, api, esc, logo, line, sgn, odds, pct, fmtTime, fmtDay, footNote, lastSync, ago, clearCache, howTo, wireHow, SB_URL, SB_KEY } from './core.js?v=202611200332';
-import { bestBets, gradeFinal } from './bets.js?v=202611200332';
-import { trackBtn } from './mybets.js?v=202611200332';
+import { games, api, esc, logo, line, sgn, odds, pct, fmtTime, fmtDay, footNote, lastSync, ago, clearCache, howTo, wireHow, SB_URL, SB_KEY } from './core.js?v=202611200341';
+import { bestBets, gradeFinal } from './bets.js?v=202611200341';
+import { trackBtn } from './mybets.js?v=202611200341';
 
 const LG = { nfl: 'NFL', cfb: 'College', nba: 'NBA' };
 
@@ -91,7 +91,7 @@ async function fillBets(box) {
     <p class="stamp" style="margin-top:0">Logged at the line shown when the page is opened before kickoff and frozen at kickoff. Record started Nov 16, 2026.</p>
     ${straight.length ? `<div class="grid g3">${straight.map(card).join('')}</div>` : '<div class="empty">Nothing clears the bar right now. That happens; no bet is a fine bet.</div>'}
     ${legs.length ? `<div class="sec"><h2 style="font-size:20px">Teaser legs</h2><p class="sub">${legs.length >= 2 ? `Pair any two as a 6-point, 2-team teaser at −110 (each leg needs 72.4%).` : 'One qualifying leg so far; it needs a partner for a 2-team teaser.'}</p><div class="grid g3">${legs.map(card).join('')}</div></div>` : ''}
-    ${howTo('How the weights work', `<p>Each tool is scored on games it hadn’t seen: research systems on seasons after they were published, Grok’s systems on games after they were found, Line Life rules on 2014–2025, The Juice and Cap’n Cash on their own graded reads. Each record is pulled toward break-even as if it had 150 more games at exactly break-even, so a hot 20-game start barely counts. A bet’s strength is its best tool in full, plus a quarter of each other tool that agrees, minus any tool on the other side. 2.5+ points over break-even is a best bet; 1 to 2.5 is a lean.</p>
+    ${howTo('How the weights work', `<p>Each tool is scored on games it hadn’t seen: research systems on seasons after they were published, Matrix systems on games after they were found, Line Life rules on 2014–2025, The Juice and Cap’n Cash on their own graded reads. Each record is pulled toward break-even as if it had 150 more games at exactly break-even, so a hot 20-game start barely counts. A bet’s strength is its best tool in full, plus a quarter of each other tool that agrees, minus any tool on the other side. 2.5+ points over break-even is a best bet; 1 to 2.5 is a lean.</p>
       <table class="t" style="margin-top:8px"><tr><th>Tool</th><th class="r">Record it’s judged on</th><th class="r">Weight</th></tr>${sources.map((x) => `<tr><td>${esc(x.name)}</td><td class="r num">${x.w + x.l ? `${x.w}–${x.l}` : '—'}</td><td class="r num ${x.edge > 0 ? 'mint' : 'dim'}">${x.edge > 0 ? '+' + (x.edge * 100).toFixed(1) + ' pts' : 'none'}</td></tr>`).join('')}
       <tr><td>In the Paint pregame totals</td><td class="r num">see its page</td><td class="r num dim">none (under break-even)</td></tr><tr><td>Redzone touchdown model</td><td class="r num">—</td><td class="r num dim">no free prop prices to bet against</td></tr></table>`, 'bets')}`;
   wireHow(box);

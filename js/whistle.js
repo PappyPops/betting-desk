@@ -1,9 +1,9 @@
 // At the Whistle: NFL live player props at the end of Q1, halftime and the end of Q3. Each ticket is the projected
 // final against the line at that moment, locked at the whistle and graded on the final box score.
-import { api, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611200332';
-import { STATS, TYPE_GROUP, propData, project, atWhistle, boxVal, calibrate } from './propmodel.js?v=202611200332';
-import { trackBtn } from './mybets.js?v=202611200332';
-import { ncdf } from './core.js?v=202611200332';
+import { api, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611200341';
+import { STATS, TYPE_GROUP, propData, project, atWhistle, boxVal, calibrate } from './propmodel.js?v=202611200341';
+import { trackBtn } from './mybets.js?v=202611200341';
+import { ncdf } from './core.js?v=202611200341';
 
 const QN = { 1: 'End Q1', 2: 'Halftime', 3: 'End Q3' };
 const NEED = { over: 0.6, under: 0.58 }; // overs need more of an edge than unders
@@ -135,7 +135,6 @@ export async function render(el) {
       <p class="stamp">Hit rate ignores pushes. Break-even at −110 is 52.4%.</p>
       ${ticketsWk.length ? `<div class="sec"><h2 style="font-size:20px">Week ${wkSel}: every ticket</h2><div class="grid g2">${ticketsWk.map(card).join('')}</div></div>` : ''}`
       : '<div class="empty">No graded tickets yet. The first whistles are Thursday night (Colts @ Texans).</div>'}</div>
-    <p class="stamp">The Grok version showed 377–268 (58%) at the whistle, but it graded against the pregame line, which a book would have moved by halftime. This one keeps the live-line record separate so the number you see is one you could have bet.</p>
     ${footNote('Box scores and live lines: ESPN (DraftKings – Live Odds), saved within a minute of each whistle. Pregame lines: DraftKings via ESPN. Not betting advice.')}`;
     for (const k of ['src', 'q', 'ty', 'pos', 'wk']) onSeg(el, k, (v) => { st[k] = v; store.set(`wh:${k}`, v); draw(); });
     el.querySelector('[data-act=refresh]').onclick = () => { clearCache(); load(); };
