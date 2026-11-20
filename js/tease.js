@@ -1,5 +1,5 @@
-import { games, esc, logo, seg, onSeg, store, line, odds, pct, decOdds, fmtTime, fmtDay, howTo, wireHow, footNote, copy, ncdf, clearCache, sgn } from './core.js?v=202611200341';
-import { nflHist, teamRows } from './hist.js?v=202611200341';
+import { games, esc, logo, seg, onSeg, store, line, odds, pct, decOdds, fmtTime, fmtDay, howTo, wireHow, footNote, copy, ncdf, clearCache, sgn } from './core.js?v=202611200424';
+import { nflHist, teamRows } from './hist.js?v=202611200424';
 
 // The model is an estimate, so a slip needs a real cushion (3%+) before it's called a play.
 const EDGE = 0.03;

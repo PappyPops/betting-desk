@@ -1,6 +1,6 @@
-import { games, blob, api, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, copy } from './core.js?v=202611200341';
-import { nflHist } from './hist.js?v=202611200341';
-import { trackBtn } from './mybets.js?v=202611200341';
+import { games, blob, api, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, copy } from './core.js?v=202611200424';
+import { nflHist } from './hist.js?v=202611200424';
+import { trackBtn } from './mybets.js?v=202611200424';
 
 const GROUP = (pos) => pos === 'QB' ? 'QB' : pos === 'TE' ? 'TE' : pos === 'WR' ? 'WR' : 'RB';
 const K_RUSH = 60, K_REC = 50, K_OPP = 8;
@@ -195,7 +195,7 @@ export async function render(el) {
     const spot = `${x.L.returning ? 'Back after missing recent games; his role is projected from before he left, so treat it as a guess. ' : ''}${x.boostNote ? `${x.boostNote.names.join(' and ')} ${x.boostNote.names.length > 1 ? 'are' : 'is'} out, so about ${x.boostNote.add.toFixed(1)} more touches come his way. ` : ''}${x.implied ? `Implied team total ${x.implied.toFixed(1)}.` : ''}${fav}${recent} ${calNote(pos)}`.trim();
     const cf = conf(x);
     return `<div class="rz-ov" style="position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px" data-close>
-      <div class="card" style="max-width:640px;width:100%;margin:auto;padding:18px" onclick="event.stopPropagation()">
+      <div class="card" style="max-width:640px;width:100%;margin:auto;padding:18px">
         <div class="row" style="justify-content:space-between;align-items:flex-start">
           <span class="team">${x.shot ? `<img style="width:56px;height:56px;border-radius:50%;object-fit:cover;background:var(--surface2)" src="${esc(x.shot)}" alt="" referrerpolicy="no-referrer">` : ''}<span><b class="disp" style="font-size:22px">${esc(x.name)}</b><div class="dim" style="font-size:13px">${esc(x.pos)} · ${esc(team)} vs ${esc(oppAbbr.abbr)} · ${x.L.sRT + x.L.sCT} TD in ${x.L.gp}g${x.status ? ` · <span class="clay">${esc(x.status)}</span>` : ''}</div></span></span>
           <span style="text-align:right"><b class="disp num" style="font-size:40px;line-height:1">${pct(x.p)}</b><div class="dim" style="font-size:12px">${cf} confidence</div></span></div>
