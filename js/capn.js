@@ -1,4 +1,4 @@
-import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611201521';
+import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611201523';
 
 const LGS = [['nfl', 'NFL'], ['cfb', 'College'], ['nba', 'NBA']];
 const SRC = { action: 'Action', docs: 'Doc’s', espn: 'ESPN', cbs: 'CBS', pickswise: 'Pickswise', covers: 'Covers', dimers: 'Dimers', espnmodel: 'ESPN' };
@@ -14,9 +14,9 @@ export async function render(el) {
 
   async function load() {
     el.innerHTML = '<div class="loading">Opening the desk…</div>';
-    const since = new Date(Date.now() - 45 * 86400e3).toISOString();
+    const from = new Date(Date.now() - 45 * 86400e3).toISOString();
     const [p, ex, meta] = await Promise.all([
-      api(`expert_picks?select=*&starts_at=gte.${encodeURIComponent(since)}&order=starts_at.asc&limit=8000`, { ttl: 120_000 }),
+      api(`expert_picks?select=*&starts_at=gte.${encodeURIComponent(from)}&order=starts_at.asc&limit=8000`, { ttl: 120_000 }),
       api('experts?select=*', { ttl: 600_000 }),
       api('blobs?key=in.(action:experts,picks:other)&select=key,data', { ttl: 60_000 }),
       api('cbs_records?select=*', { ttl: 600_000 }).catch(() => []),
