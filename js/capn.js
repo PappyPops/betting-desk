@@ -1,4 +1,4 @@
-import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611201524';
+import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611201526';
 
 const LGS = [['nfl', 'NFL'], ['cfb', 'College'], ['nba', 'NBA']];
 const SRC = { action: 'Action', docs: 'Doc’s', espn: 'ESPN', cbs: 'CBS', pickswise: 'Pickswise', covers: 'Covers', dimers: 'Dimers', espnmodel: 'ESPN' };
@@ -47,10 +47,11 @@ export async function render(el) {
     if (e.source === 'cbs') { const c = cbsRec.get(`${e.id}|${lg}`); return c ? { long: { w: c.season_w, l: c.season_l, p: c.season_p }, longLab: 'season ATS', l30: c.l30_w !== null ? { w: c.l30_w, l: c.l30_l, p: c.l30_p } : null, l30Lab: 'L30' } : { long: er, longLab: 'season ATS', l30: null }; }
     if (e.source === 'action') return { long: null, l30: er, l30Lab: 'L30' };
     const s30 = settled30(e.id), started = since[e.source], full = started && Date.now() - new Date(started).getTime() >= 30 * 86400e3;
-    return { long: e.source === 'espn' || full ? er : null, longLab: e.source === 'espn' ? 'season, to win' : 'tracked here', l30: s30.w + s30.l + s30.p ? s30 : null, l30Lab: full ? 'L30' : `since ${new Date(started).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` };
+    return { su: e.source === 'espn', long: e.source === 'espn' || full ? er : null, longLab: e.source === 'espn' ? 'season, to win' : 'tracked here', l30: s30.w + s30.l + s30.p ? s30 : null, l30Lab: full ? 'L30' : `since ${new Date(started).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` };
   }
   // hot = 60%+ over enough games to mean something
-  const hot = (R) => (R.l30 && R.l30.w + R.l30.l >= 10 && rp(R.l30) >= 0.6) || (R.long && R.long.w + R.long.l >= 30 && rp(R.long) >= 0.6);
+  // ESPN's panel picks straight-up winners, where 65% just means picking favorites, so it never counts as hot
+  const hot = (R) => !R.su && ((R.l30 && R.l30.w + R.l30.l >= 10 && rp(R.l30) >= 0.6) || (R.long && R.long.w + R.long.l >= 30 && rp(R.long) >= 0.6));
   const star = (id) => `<button class="btn" data-follow="${id}" title="${follows.has(String(id)) ? 'Unfollow' : 'Follow'}" style="padding:0 6px;font-size:13px;line-height:1.4;border:none;background:none;color:${follows.has(String(id)) ? 'var(--gold)' : 'var(--muted)'}">${follows.has(String(id)) ? '★' : '☆'}</button>`;
   const recLine = (R) => [R.long ? `<span title="${esc(R.longLab)}">${rt(R.long)}</span>` : '', R.l30 ? `<span title="${esc(R.l30Lab)}">(${esc(R.l30Lab)}) <b class="${rp(R.l30) >= 0.6 && R.l30.w + R.l30.l >= 10 ? 'gold' : rp(R.l30) !== null && rp(R.l30) < 0.5 ? 'clay' : ''}">${rt(R.l30)}</b></span>` : ''].filter(Boolean).join(' ') || 'new';
   const sideLabel = (g, mk, side) => mk === 'tot' ? (side === 'over' ? 'Over' : 'Under') : (g?.data?.[side])?.short ?? side;
@@ -89,7 +90,7 @@ export async function render(el) {
     const gameList = [...byGame.entries()].map(([gid, ss]) => ({ gid, g: games.get(gid), ss })).filter((x) => x.g && x.g.league === st.lg).sort((a, b) => new Date(a.g.start_time) - new Date(b.g.start_time));
     const lgIds = new Set(lgPicks.map((k) => k.expert_id));
     const board = [...experts.values()].filter((e) => lgIds.has(e.id) && !MODEL.has(e.source)).map((e) => ({ e, R: recs(e, st.lg) })).filter((x) => x.R.long || x.R.l30)
-      .sort((a, b) => (follows.has(String(b.e.id)) - follows.has(String(a.e.id))) || (hot(b.R) - hot(a.R)) || ((rp(b.R.l30) ?? rp(b.R.long) ?? 0) - (rp(a.R.l30) ?? rp(a.R.long) ?? 0)));
+      .sort((a, b) => (follows.has(String(b.e.id)) - follows.has(String(a.e.id))) || (!!a.R.su - !!b.R.su) || (hot(b.R) - hot(a.R)) || ((rp(b.R.l30) ?? rp(b.R.long) ?? 0) - (rp(a.R.l30) ?? rp(a.R.long) ?? 0)));
 
     const pickRow = (k) => { const e = experts.get(k.expert_id); const R = recs(e, k.league); const f = follows.has(String(k.expert_id)), h = hot(R);
       return `<div class="row" style="justify-content:space-between;padding:5px 0;border-top:1px solid var(--line);font-size:13px;${f || h ? 'background:linear-gradient(90deg,#f0b4291f,transparent 70%);' : ''}">
@@ -128,7 +129,7 @@ export async function render(el) {
         ${panelLine(gid, g)}
         ${ss.sort((a, b) => b.picks.length - a.picks.length).map((s) => `<div style="margin-top:10px"><div class="row" style="justify-content:space-between"><b style="font-size:13px">${esc(sideLabel(g, s.mk, s.side))} · ${MKN[s.mk]}</b><span class="chip ${s.picks.length >= 3 ? 'gold' : ''}">${s.picks.length}</span></div>${rows(s.picks)}</div>`).join('')}
       </div>`).join('') || '<div class="empty">No open picks yet for this league.</div>'}</div></div>`
-    : `<div class="sec"><h2>Handicappers</h2><p class="sub">Tap ☆ to follow someone; followed handicappers are starred and listed first on every card. <b class="gold">Gold</b> names are hitting 60%+ over the last 30 days (10+ decisions) or over their longer record (30+). Win–loss only: units depend on how each one sizes bets, so they aren’t shown.</p>
+    : `<div class="sec"><h2>Handicappers</h2><p class="sub">Tap ☆ to follow someone; followed handicappers are starred and listed first on every card. <b class="gold">Gold</b> names are hitting 60%+ over the last 30 days (10+ decisions) or over their longer record (30+). Win–loss only: units depend on how each one sizes bets, so they aren’t shown. ESPN’s panel picks winners straight up (no spread), so it’s listed last and never turns gold.</p>
       <div class="card" style="padding:4px 12px;overflow-x:auto"><table class="t"><tr><th>Handicapper</th><th>Source</th><th class="r">Record</th><th class="r">Last 30 days</th></tr>
       ${board.map(({ e, R }) => { const f = follows.has(String(e.id)), h = hot(R); return `<tr><td>${star(e.id)}<b class="${f || h ? 'gold' : ''}">${esc(e.name)}</b></td><td><span class="chip">${SRC[e.source] ?? e.source}</span></td>
         <td class="r num">${R.long ? `${rt(R.long)}<div class="dim" style="font-size:12px">${R.long.w + R.long.l ? Math.round(rp(R.long) * 100) + '% · ' : ''}${esc(R.longLab)}</div>` : '<span class="dim">—</span>'}</td>
