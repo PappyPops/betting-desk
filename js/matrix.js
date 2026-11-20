@@ -1,7 +1,7 @@
-import { games as loadGames, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, logo } from './core.js?v=202611200503';
-import { nflHist } from './hist.js?v=202611200503';
-import { makeContext, parseSystem, matchSystem, gradePick, pickLabel } from './systems.js?v=202611200503';
-import { RESEARCH, gradeResearch, researchLabel, BREAK_EVEN, nbaGames } from './research.js?v=202611200503';
+import { games as loadGames, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, logo } from './core.js?v=202611201357';
+import { nflHist } from './hist.js?v=202611201357';
+import { makeContext, parseSystem, matchSystem, gradePick, pickLabel } from './systems.js?v=202611201357';
+import { RESEARCH, gradeResearch, researchLabel, BREAK_EVEN, nbaGames } from './research.js?v=202611201357';
 
 const NFL_IN_RECORD = (g) => g.season < 2026 || (g.season === 2026 && g.week <= 9); // original NFL records run through 2026 week 9
 const CFB_FROM_WEEK = 5; // original college records run through 2026 week 4

@@ -1,7 +1,7 @@
-import { games, api, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611200503';
-import { flagNow, loadFlags, gradeFlags, TRIG, historyNote, SNAPS_FROM } from './moves.js?v=202611200503';
-import { trackBtn } from './mybets.js?v=202611200503';
-import { nflHist } from './hist.js?v=202611200503';
+import { games, api, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611201357';
+import { flagNow, loadFlags, gradeFlags, TRIG, historyNote, SNAPS_FROM } from './moves.js?v=202611201357';
+import { trackBtn } from './mybets.js?v=202611201357';
+import { nflHist } from './hist.js?v=202611201357';
 
 // Totals rules written up front (not mined from the data), then checked on two separate halves of history.
 export const CUTS = [
@@ -116,21 +116,37 @@ export async function render(el) {
     const movers = rows.filter((g) => g.state === 'pre' && new Date(g.start_time).getTime() > now + 3600e3 && new Date(g.start_time).getTime() < now + 8 * 86400e3)
       .flatMap((g) => flagNow(g).map((f) => ({ g, f })));
     // signal strength: how far past the trigger it has moved, plus history backing it; flags history says not to chase go last
-    const flagScore = ({ g, f }) => { const h = historyNote(st.lg, f); return f.move / TRIG[st.lg][f.mk] + (h?.tone === 'mint' ? 2 : 0) - (h?.tone === 'clay' ? 100 : 0); };
+    // estimated chance the flagged side wins at the flagged number. A move by itself has no proven edge, so it starts at
+    // 50%; NFL history and cuts that hold raise or lower it, each record shrunk toward break-even (150 games' worth).
+    const shrink = (w, l) => (w + 0.524 * 150) / (w + l + 150);
+    const chance = ({ g, f }) => {
+      const h = historyNote(st.lg, f), why = [];
+      let p = 0.5, conflict = false;
+      if (h?.tone === 'mint') { p = Math.max(p, shrink(82, 57)); why.push('NFL history on 4+ point drops'); }
+      if (h?.tone === 'clay') { p = shrink(63, 90); why.push('NFL history says big favorite moves fade'); }
+      if (f.mk === 'tot') for (const c of liveCuts.get(g.id) || []) {
+        if (c.side !== f.side) { conflict = true; why.push(`${c.name} cut leans ${c.side}`); continue; }
+        const q = shrink(c.a.w + c.b.w, c.a.l + c.b.l); if (q > p) p = q; why.push(`${c.name} cut`);
+      }
+      if (conflict) p = Math.min(p, 0.5);
+      return { p, why, strong: p >= 0.55 };
+    };
+    const flagScore = (m) => { const h = historyNote(st.lg, m.f); return m.f.move / TRIG[st.lg][m.f.mk] + (chance(m).p - 0.5) * 40 - (h?.tone === 'clay' ? 100 : 0); };
     const MS = { time: (a, b) => new Date(a.g.start_time) - new Date(b.g.start_time) || flagScore(b) - flagScore(a), signal: (a, b) => flagScore(b) - flagScore(a), move: (a, b) => b.f.move - a.f.move, new: (a, b) => openedAt(b.g) - openedAt(a.g) };
     movers.sort(MS[st.sort] || MS.signal);
     const fr = (k) => flagRec?.[k];
     const recCell = (b) => b && b.n ? `${b.w}–${b.l}${b.p ? '–' + b.p : ''}<div class="dim" style="font-size:12px">${pct(b.w + b.l ? b.w / (b.w + b.l) : null, 1)}</div>` : '—';
     const clvCell = (b) => b && b.n ? `${b.beat} of ${b.n}<div class="dim" style="font-size:12px">${b.same} same · ${b.back} came back</div>` : '—';
     const movesHtml = `
-    <div class="sec"><h2>Moving lines</h2><p class="sub">The opener is where books make mistakes, and the move shows which side they were wrong on. When a line has moved ${TRIG[st.lg].tot}+ on a total or ${TRIG[st.lg].sp}+ on a spread, the side it moved toward is flagged with the number to get and the point where it’s no longer worth chasing.</p>
-      ${movers.length ? `<div class="grid g3">${movers.map(({ g, f }) => `<div class="card">
-        <div class="row" style="justify-content:space-between;font-size:12.5px"><span>${esc(fmtDay(g.start_time))} · ${esc(fmtTime(g.start_time))}</span><span class="chip">${f.mk === 'tot' ? 'Total' : 'Spread'}</span></div>
+    <div class="sec"><h2>Moving lines</h2><p class="sub">The opener is where books make mistakes, and the move shows which side they were wrong on. When a line has moved ${TRIG[st.lg].tot}+ on a total or ${TRIG[st.lg].sp}+ on a spread, the side it moved toward is flagged with the number to get and the point where it’s no longer worth chasing. A move by itself is about a coin flip at the new number, so “get it at” is price discipline, not a pick. <b class="gold">Gold</b> cards are the ones where NFL history or a cut that holds puts the estimated win chance at 55% or better (break-even at −110 is 52.4%).</p>
+      ${movers.length ? `<div class="grid g3">${movers.map(({ g, f }) => { const ch = chance({ g, f }); return `<div class="card"${ch.strong ? ' style="border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold);background:linear-gradient(180deg,#f0b4291a,transparent 60%)"' : ''}>
+        <div class="row" style="justify-content:space-between;font-size:12.5px"><span>${esc(fmtDay(g.start_time))} · ${esc(fmtTime(g.start_time))}</span><span>${ch.strong ? '<span class="chip gold">Strong</span> ' : ''}<span class="chip">${f.mk === 'tot' ? 'Total' : 'Spread'}</span></span></div>
         <div class="dim" style="font-size:13px;margin-top:6px">${esc(team(g, 'away'))} @ ${esc(team(g, 'home'))}</div>
         <div class="disp" style="font-size:22px;margin:2px 0">${esc(pick(g, f, f.num))}</div>
         <div style="font-size:13px">Opened ${esc(pick(g, f, f.open))} · moved ${f.move} toward this side</div>
         ${(() => { const h = historyNote(st.lg, f); return h && h.tone === 'clay' ? `<div style="font-size:13px;margin-top:6px;padding-top:6px;border-top:1px solid var(--line2)" class="clay"><b>${esc(h.text)}</b></div>`
-          : `<div style="font-size:13px;margin-top:6px;padding-top:6px;border-top:1px solid var(--line2)"><b class="mint">Get it at ${esc(pick(g, f, f.num))} or better.</b> <span class="clay">Pass past ${esc(pick(g, f, f.limit))}.</span>${h ? `<div class="mint" style="font-size:12.5px;margin-top:4px">${esc(h.text)}</div>` : ''}<div style="text-align:right;margin-top:6px">${trackBtn({ gid: String(g.id), market: f.mk, side: f.side, line: f.num, label: pick(g, f, f.num), game: `${team(g, 'away')} @ ${team(g, 'home')}`, start: g.start_time, tool: 'Line Life' })}</div></div>`; })()}</div>`).join('')}</div>` : '<div class="empty">No line has moved enough yet.</div>'}
+          : `<div style="font-size:13px;margin-top:6px;padding-top:6px;border-top:1px solid var(--line2)"><b class="mint">Get it at ${esc(pick(g, f, f.num))} or better.</b> <span class="clay">Pass past ${esc(pick(g, f, f.limit))}.</span>${h ? `<div class="mint" style="font-size:12.5px;margin-top:4px">${esc(h.text)}</div>` : ''}<div style="text-align:right;margin-top:6px">${trackBtn({ gid: String(g.id), market: f.mk, side: f.side, line: f.num, label: pick(g, f, f.num), game: `${team(g, 'away')} @ ${team(g, 'home')}`, start: g.start_time, tool: 'Line Life' })}</div></div>`; })()}
+        <div class="dim" style="font-size:12px;margin-top:6px">Est. win chance <b class="${ch.strong ? 'gold' : ch.p < 0.5 ? 'clay' : ''}">${Math.round(ch.p * 100)}%</b> · ${ch.why.length ? esc(ch.why.join(' · ')) : 'the move alone (no proven edge, price only)'}</div></div>`; }).join('')}</div>` : '<div class="empty">No line has moved enough yet.</div>'}
       <div class="card" style="padding:4px 12px;overflow-x:auto;margin-top:12px"><table class="t"><tr><th>Does the flag work?</th><th class="r">Line kept moving past the flag</th><th class="r">Record at the flagged number</th></tr>
         ${[['all', 'All leagues'], ...['nfl', 'cfb', 'nba'].flatMap((lg) => [[`${lg}:tot`, `${LGN[lg]} totals`], [`${lg}:sp`, `${LGN[lg]} spreads`]])].map(([k, lab]) => `<tr><td>${lab}</td><td class="r num">${flagRec ? clvCell(fr(k)) : '…'}</td><td class="r num">${flagRec ? recCell(fr(k)) : '…'}</td></tr>`).join('')}</table></div>
       <p class="stamp">NFL history notes: TeamRankings’ opening and closing lines since 2008, graded at the close. Each flag is frozen the first time it fires (every line change has been saved since Nov 16, 2026) and graded at that number. “Kept moving” means the closing line ended up worse than the flagged number, so taking the flag beat the close. Break-even is 52.4% at −110. These rules were written before any flag was graded.</p></div>`;
