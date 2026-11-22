@@ -1,7 +1,7 @@
-import { games, api, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611221403';
-import { flagNow, loadFlags, gradeFlags, TRIG, historyNote, SNAPS_FROM } from './moves.js?v=202611221403';
-import { trackBtn } from './mybets.js?v=202611221403';
-import { nflHist } from './hist.js?v=202611221403';
+import { games, api, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611221405';
+import { flagNow, loadFlags, gradeFlags, TRIG, historyNote, SNAPS_FROM } from './moves.js?v=202611221405';
+import { trackBtn } from './mybets.js?v=202611221405';
+import { nflHist } from './hist.js?v=202611221405';
 
 // Totals rules written up front (not mined from the data), then checked on two separate halves of history.
 export const CUTS = [
@@ -199,7 +199,7 @@ export async function render(el) {
     const ticks = [lo + 0.5, (lo + hi) / 2, hi - 0.5].map((v) => `<text x="4" y="${y(v) + 4}" font-size="11" fill="var(--muted)">${fmt(Math.round(v * 2) / 2)}</text>`).join('');
     return `<div class="kicker" style="color:var(--muted);margin:10px 0 4px">${label}</div><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${ticks}
       ${open !== null && open !== undefined ? `<line x1="${P}" x2="${W - P}" y1="${y(open)}" y2="${y(open)}" stroke="var(--line2)" stroke-dasharray="4 4"/><text x="${W - P}" y="${y(open) - 4}" font-size="11" fill="var(--muted)" text-anchor="end">open ${fmt(open)}</text>` : ''}
-      <path d="${d}" fill="none" stroke="var(--text)" stroke-width="2"/>${dots}
+      <path d="${d}" fill="none" stroke="var(--fg)" stroke-width="2.2"/>${dots}
       <text x="${P}" y="${H - 4}" font-size="11" fill="var(--muted)">${esc(fmtDay(new Date(t0).toISOString()))}</text><text x="${W - P}" y="${H - 4}" font-size="11" fill="var(--muted)" text-anchor="end">${esc(fmtDay(new Date(t1).toISOString()))}</text></svg>`;
   }
   // fast = a move of the threshold or more inside 30 minutes; everything else is drift
