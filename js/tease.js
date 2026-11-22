@@ -1,5 +1,6 @@
-import { games, esc, logo, seg, onSeg, store, line, odds, pct, decOdds, fmtTime, fmtDay, howTo, wireHow, footNote, copy, ncdf, clearCache, sgn } from './core.js?v=202611221421';
-import { nflHist, teamRows } from './hist.js?v=202611221421';
+import { games, esc, logo, seg, onSeg, store, line, odds, pct, decOdds, fmtTime, fmtDay, howTo, wireHow, footNote, copy, ncdf, clearCache, sgn } from './core.js?v=202611221424';
+import { nflHist, teamRows } from './hist.js?v=202611221424';
+import { mountParlay } from './parlay.js?v=202611221424';
 
 // The model is an estimate, so a slip needs a real cushion (3%+) before it's called a play.
 const EDGE = 0.03;
@@ -49,7 +50,7 @@ export async function render(el) {
   const st = {
     lg: store.get('tease:lg', 'nfl'), pts: store.get('tease:pts', 6), wk: 'this',
     pushLoses: store.get('tease:push', false), filter: 'all',
-    prices: store.get('tease:prices', DEF_PRICES), slip: [],
+    prices: store.get('tease:prices', DEF_PRICES), slip: [], mode: store.get('tease:mode', 'teaser'),
   };
   let legs = [], weekLabel = '';
   const rows = await histRows();
@@ -103,6 +104,14 @@ export async function render(el) {
   }
 
   function draw() {
+    if (st.mode === 'parlay') {
+      el.innerHTML = `<div class="ph"><div><div class="kicker">Ticket checker</div><h1>Tease Me</h1><p>Build a parlay from any upcoming game and see what each leg is really worth, what the ticket should pay, and which leg is dragging it down.</p></div></div>
+        <div class="row" style="margin-bottom:12px">${seg('mode', [['teaser', 'Teasers'], ['parlay', 'Parlays']], st.mode)}</div><div id="parlay"></div>
+        ${footNote('Lines: DraftKings via ESPN. Chances are estimates; a plus-value ticket still loses most of the time.')}`;
+      onSeg(el, 'mode', (v) => { st.mode = v; store.set('tease:mode', v); draw(); });
+      mountParlay(el.querySelector('#parlay'));
+      return;
+    }
     const be2 = Math.sqrt(1 / decOdds(price(2))), be3 = Math.cbrt(1 / decOdds(price(3)));
     const shown = legs.filter((l) => st.filter === 'all' || (st.filter === 'both' ? l.key === 'both' : l.key))
       .sort((a, b) => new Date(a.g.start_time) - new Date(b.g.start_time) || a.gid.localeCompare(b.gid));
@@ -119,6 +128,7 @@ export async function render(el) {
       <li>A teaser pays only if every leg covers. The slip’s chance is the legs multiplied together, then compared with the payout. Break-even per leg is shown on the board.</li>
       <li>Legs are treated as independent and lines move, so this is an estimate. College uses a plain bell curve and is rougher.</li></ol>`, 'tease')}
     <div class="row" style="margin-bottom:10px">
+      ${seg('mode', [['teaser', 'Teasers'], ['parlay', 'Parlays']], st.mode)}
       ${seg('lg', [['nfl', 'NFL'], ['cfb', 'College']], st.lg)}
       ${seg('wk', [['this', 'This week'], ['next', 'Next week']], st.wk)}
       ${seg('pts', [6, 6.5, 7, 10].map((p) => [p, `${p} pts`]), st.pts)}
@@ -153,6 +163,7 @@ export async function render(el) {
       </table></div></div>
     ${footNote('Spreads are DraftKings numbers as shown on ESPN, updated every 5 minutes. History: nflverse closing lines, 2002–2025. Even a plus-EV slip loses plenty of weeks.')}`;
 
+    onSeg(el, 'mode', (v) => { st.mode = v; store.set('tease:mode', v); draw(); });
     onSeg(el, 'lg', (v) => { st.lg = v; store.set('tease:lg', v); st.slip = []; load(); });
     onSeg(el, 'wk', (v) => { st.wk = v; st.slip = []; load(); });
     onSeg(el, 'pts', (v) => { st.pts = Number(v); store.set('tease:pts', st.pts); st.slip = []; load(); });

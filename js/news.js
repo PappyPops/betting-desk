@@ -1,6 +1,8 @@
 // What's new: the changes worth knowing about, newest first. Add an entry for each real feature, not for fixes.
 // tool = the page it links to (the sidebar id), or null.
 export const NEWS = [
+  { date: '2026-11-22', tool: 'tease', title: 'Parlay checker', text: 'Tease Me has a Parlays tab: build a ticket from any NFL, college or NBA game and see each leg’s real chance, the fair price vs what the book pays, same-game warnings, and which leg to drop.' },
+  { date: '2026-11-22', tool: 'mybets', title: 'Hedge and middle finder', text: 'Tap Hedge on any open spread, total or moneyline in My Bets (or use the calculator). It finds the middle window where both bets win, the chance of landing in it, and what each hedge size pays in every outcome.' },
   { date: '2026-11-22', tool: 'linelife', title: 'Line timelines', text: 'Tap any game (or Timeline on a card) to see every line change since the open, with fast moves that held marked in gold and a plain summary of how it got there.' },
   { date: '2026-11-22', tool: 'redzone', title: 'Round robin builder', text: 'Pick 3–6 touchdown scorers, enter your book’s prices and the dollars per bet, and see what each outcome pays, the chance of each, and the expected return of every way to bet them (by 2s, 3s, full parlay, everything).' },
   { date: '2026-11-22', tool: 'paint', title: 'Dunkel Index added', text: 'In the Paint shows Dunkel’s projected total next to ours, says when the two models agree or split, and grades Dunkel’s totals. Dunkel’s NFL, college and NBA picks are also in Cap’n Cash with their own record.' },
