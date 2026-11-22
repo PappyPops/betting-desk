@@ -1,6 +1,7 @@
 // My Bets: track the bets you actually place from any tool, graded automatically, with units and ROI by tool.
 // Saved in this browser; Export and Import move them to another phone or computer.
-import { api, blob, esc, fmtDay, fmtTime, pct, odds, store, toast, footNote, seg, onSeg } from './core.js?v=202611221416';
+import { mountHedge } from './hedge.js?v=202611221421';
+import { api, blob, esc, fmtDay, fmtTime, pct, odds, store, toast, footNote, seg, onSeg } from './core.js?v=202611221421';
 
 const KEY = 'mybets';
 export const getBets = () => store.get(KEY, []);
@@ -48,6 +49,21 @@ function gradeOne(b, g, box) {
   const m = (b.side === 'home' ? hs - as : as - hs) + ln; return m === 0 ? 'P' : m > 0 ? 'W' : 'L';
 }
 
+// prefill the hedge panel from a tracked bet and, when the game is on, the current number for the other side
+function hedgeInit(b, g, title) {
+  const lg = { nfl: 'nfl', cfb: 'cfb', nba: 'nba', cbb: 'cbb' }[g?.league] ?? 'nfl';
+  const per = Number(g?.data?.period || 0), ck = String(g?.data?.clock ?? '');
+  const qlen = lg === 'nba' ? 12 : lg === 'cbb' ? 20 : 15, nq = lg === 'cbb' ? 2 : 4;
+  const mins = ck.includes(':') ? Number(ck.split(':')[0]) + Number(ck.split(':')[1] || 0) / 60 : Number(ck) / 60 || 0;
+  const leftRaw = g?.state === 'in' && per ? Math.max(0, ((nq - per) * qlen + Math.min(qlen, mins)) / (nq * qlen)) : 1;
+  const left = [1, 0.75, 0.5, 0.25, 0.1].reduce((a, x) => Math.abs(x - leftRaw) < Math.abs(a - leftRaw) ? x : a, 1);
+  const init = { title: `Hedge: ${title}`, lg, left, odds1: b.odds, stake1: b.stake, mk: b.market, odds2: -110 };
+  if (b.market === 'tot') Object.assign(init, { side: b.side, line1: b.line, line2: g?.total ?? '' });
+  if (b.market === 'sp') Object.assign(init, { side: 'mine', line1: b.line, line2: g?.spread_home !== null && g?.spread_home !== undefined ? (b.side === 'home' ? -Number(g.spread_home) : Number(g.spread_home)) : '' });
+  if (b.market === 'ml') Object.assign(init, { odds1: Number(b.line) || b.odds, odds2: '' });
+  return init;
+}
+
 export async function render(el) {
   const st = { view: store.get('mb:view', 'open') };
   el.innerHTML = '<div class="loading">Grading your tickets…</div>';
@@ -59,7 +75,7 @@ export async function render(el) {
     for (let i = 0; i < gids.length; i += 150) {
       const part = gids.slice(i, i + 150).join(',');
       if (!part) break;
-      for (const g of await api(`games?select=id,state,home_score,away_score,start_time&id=in.(${part})`, { ttl: 60_000 })) G.set(String(g.id), g);
+      for (const g of await api(`games?select=id,league,state,home_score,away_score,start_time,spread_home,total,data&id=in.(${part})`, { ttl: 60_000 })) G.set(String(g.id), g);
       for (const s of await api(`whistle_snaps?select=game_id,box&period=eq.4&game_id=in.(${part})`, { ttl: 120_000 })) B.set(String(s.game_id), s.box);
     }
     for (const b of list) {
@@ -79,7 +95,7 @@ export async function render(el) {
       <td class="r"><input class="num" data-f="odds" value="${b.odds}" style="width:62px;background:transparent;color:inherit;border:1px solid var(--line2);border-radius:6px;padding:2px 4px;text-align:right"></td>
       <td class="r"><input class="num" data-f="stake" value="${b.stake}" style="width:46px;background:transparent;color:inherit;border:1px solid var(--line2);border-radius:6px;padding:2px 4px;text-align:right"></td>
       <td class="r num">${b.result ? `<b class="${b.result === 'W' ? 'mint' : b.result === 'L' ? 'clay' : 'dim'}">${b.result === 'W' ? '+' + (b.stake * payout(b.odds)).toFixed(2) : b.result === 'L' ? '−' + b.stake : 'push'}</b>${b.manual ? ' <button class="btn" data-man="" title="Undo" style="padding:0 6px;font-size:11px">↺</button>' : ''}` : b.market === 'manual' ? `<span style="white-space:nowrap">${['W', 'L', 'P'].map((r) => `<button class="btn" data-man="${r}" style="padding:1px 7px;font-size:11px">${r}</button>`).join(' ')}</span>` : '<span class="dim">open</span>'}</td>
-      <td class="r"><button class="btn" data-del style="padding:2px 8px;font-size:12px">✕</button></td></tr>`;
+      <td class="r" style="white-space:nowrap">${!b.result && ['sp', 'tot', 'ml'].includes(b.market) ? '<button class="btn" data-hedge style="padding:2px 8px;font-size:12px;margin-right:4px">Hedge</button>' : ''}<button class="btn" data-del style="padding:2px 8px;font-size:12px">✕</button></td></tr>`;
     const shown = st.view === 'open' ? open : done;
     el.innerHTML = `
     <div class="ph"><div><div class="kicker">Your tickets</div><h1>My Bets</h1><p>Tap <b>+ Track</b> on any pick in Best bets, Betting Council, Slant, At the Whistle or Line Life. Each bet grades itself when the game ends (council picks the site can't match to a game grade from the council ledger, or tap W / L / P), and the record is split by the tool it came from, so you can see which ones actually pay you.</p></div></div>
@@ -94,17 +110,20 @@ export async function render(el) {
       <span class="row" style="gap:6px"><span class="dim" style="font-size:12.5px">New bets at</span><input data-def="odds" value="${store.get('mb:odds', -110)}" style="width:58px;background:transparent;color:inherit;border:1px solid var(--line2);border-radius:6px;padding:2px 4px"><span class="dim" style="font-size:12.5px">for</span><input data-def="stake" value="${store.get('mb:stake', 1)}" style="width:40px;background:transparent;color:inherit;border:1px solid var(--line2);border-radius:6px;padding:2px 4px"><span class="dim" style="font-size:12.5px">u</span></span></div>
       <div class="card" style="padding:4px 12px;overflow-x:auto;margin-top:10px"><table class="t"><tr><th>Bet</th><th class="r">Odds</th><th class="r">Units</th><th class="r">Result</th><th></th></tr>
       ${shown.map(row).join('') || `<tr><td colspan="5" class="muted">${st.view === 'open' ? 'No open bets. Tap + Track on a pick to add one.' : 'Nothing graded yet.'}</td></tr>`}</table></div>
-      <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><button class="btn" data-act="export">Export</button><button class="btn" data-act="import">Import</button><button class="btn" data-act="csv">Download CSV</button></div>
+      <div id="hedgebox"></div>
+      <div class="row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><button class="btn" data-act="hcalc">Hedge / middle calculator</button><button class="btn" data-act="export">Export</button><button class="btn" data-act="import">Import</button><button class="btn" data-act="csv">Download CSV</button></div>
       <p class="stamp">Bets are saved in this browser. To move them to another device, tap Export here, then Import on the other one and paste.</p></div>
     ${footNote('Graded from ESPN final scores and box scores.')}`;
     onSeg(el, 'view', (v) => { st.view = v; store.set('mb:view', v); draw(); });
     el.querySelectorAll('tr[data-i]').forEach((tr) => {
       const i = Number(tr.dataset.i);
       tr.querySelectorAll('input[data-f]').forEach((inp) => inp.onchange = () => { const l = getBets(); const v = Number(inp.value); if (Number.isFinite(v) && v !== 0) { l[i][inp.dataset.f] = v; save(l); draw(); } });
+      const hb = tr.querySelector('[data-hedge]'); if (hb) hb.onclick = () => { const b = getBets()[i]; const box = el.querySelector('#hedgebox'); mountHedge(box, hedgeInit(b, G.get(String(b.gid)), label(b))); box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
       tr.querySelector('[data-del]').onclick = () => { const l = getBets(); l.splice(i, 1); save(l); draw(); };
       tr.querySelectorAll('[data-man]').forEach((btn) => btn.onclick = () => { const l = getBets(); if (btn.dataset.man) l[i].manual = btn.dataset.man; else delete l[i].manual; save(l); draw(); });
     });
     el.querySelectorAll('input[data-def]').forEach((inp) => inp.onchange = () => { const v = Number(inp.value); if (Number.isFinite(v) && v !== 0) store.set(`mb:${inp.dataset.def}`, v); });
+    el.querySelector('[data-act=hcalc]').onclick = () => { const box = el.querySelector('#hedgebox'); mountHedge(box, {}); box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
     el.querySelector('[data-act=export]').onclick = async () => { const t = btoa(unescape(encodeURIComponent(JSON.stringify(getBets())))); try { await navigator.clipboard.writeText(t); toast('Copied. Paste it into Import on your other device.'); } catch { prompt('Copy this:', t); } };
     el.querySelector('[data-act=import]').onclick = () => { const t = prompt('Paste the text from Export:'); if (!t) return; try { const inc = JSON.parse(decodeURIComponent(escape(atob(t.trim())))); const l = getBets(); const have = new Set(l.map((b) => b.id)); const add = inc.filter((b) => b.id && !have.has(b.id)); save([...add, ...l]); toast(`Added ${add.length} bets`); draw(); } catch { toast('That text didn’t read as an export.'); } };
     el.querySelector('[data-act=csv]').onclick = () => { const l = getBets(); const rows = [['placed', 'tool', 'bet', 'game', 'odds', 'units', 'result'], ...l.map((b) => [b.placed, b.tool, label(b), b.game ?? '', b.odds, b.stake, b.result ?? 'open'])]; const blob = new Blob([rows.map((r) => r.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(',')).join('\n')], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'my-bets.csv'; a.click(); };

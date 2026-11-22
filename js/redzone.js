@@ -1,7 +1,7 @@
-import { games, blob, api, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, copy } from './core.js?v=202611221416';
-import { nflHist } from './hist.js?v=202611221416';
-import { trackBtn } from './mybets.js?v=202611221416';
-import { roundRobin, decOf, amOf } from './rr.js?v=202611221416';
+import { games, blob, api, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, copy } from './core.js?v=202611221421';
+import { nflHist } from './hist.js?v=202611221421';
+import { trackBtn } from './mybets.js?v=202611221421';
+import { roundRobin, decOf, amOf } from './rr.js?v=202611221421';
 
 const GROUP = (pos) => pos === 'QB' ? 'QB' : pos === 'TE' ? 'TE' : pos === 'WR' ? 'WR' : 'RB';
 const K_RUSH = 60, K_REC = 50, K_OPP = 8;
