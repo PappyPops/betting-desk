@@ -1,8 +1,8 @@
-import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611201527';
+import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611221317';
 
 const LGS = [['nfl', 'NFL'], ['cfb', 'College'], ['nba', 'NBA']];
-const SRC = { action: 'Action', docs: 'Doc’s', espn: 'ESPN', cbs: 'CBS', pickswise: 'Pickswise', covers: 'Covers', dimers: 'Dimers', espnmodel: 'ESPN' };
-const MODEL = new Set(['covers', 'dimers', 'espnmodel']); // computer picks, not people
+const SRC = { action: 'Action', docs: 'Doc’s', espn: 'ESPN', cbs: 'CBS', pickswise: 'Pickswise', covers: 'Covers', dimers: 'Dimers', espnmodel: 'ESPN', dunkel: 'Dunkel' };
+const MODEL = new Set(['covers', 'dimers', 'espnmodel', 'dunkel']); // computer picks, not people
 const MKT = (t) => /^spread/.test(t) ? 'sp' : /^ml/.test(t) ? 'ml' : ['over', 'under'].includes(t) ? 'tot' : null;
 const MKN = { sp: 'Spread', tot: 'Total', ml: 'Moneyline' };
 const median = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : null; };
@@ -89,7 +89,7 @@ export async function render(el) {
     for (const gid of panel.keys()) if (!byGame.has(gid)) byGame.set(gid, []);
     const gameList = [...byGame.entries()].map(([gid, ss]) => ({ gid, g: games.get(gid), ss })).filter((x) => x.g && x.g.league === st.lg).sort((a, b) => new Date(a.g.start_time) - new Date(b.g.start_time));
     const lgIds = new Set(lgPicks.map((k) => k.expert_id));
-    const board = [...experts.values()].filter((e) => lgIds.has(e.id) && !MODEL.has(e.source)).map((e) => ({ e, R: recs(e, st.lg) })).filter((x) => x.R.long || x.R.l30)
+    const board = [...experts.values()].filter((e) => lgIds.has(e.id)).map((e) => ({ e, R: recs(e, st.lg) })).filter((x) => x.R.long || x.R.l30)
       .sort((a, b) => (follows.has(String(b.e.id)) - follows.has(String(a.e.id))) || (!!a.R.su - !!b.R.su) || (hot(b.R) - hot(a.R)) || ((rp(b.R.l30) ?? rp(b.R.long) ?? 0) - (rp(a.R.l30) ?? rp(a.R.long) ?? 0)));
 
     const pickRow = (k) => { const e = experts.get(k.expert_id); const R = recs(e, k.league); const f = follows.has(String(k.expert_id)), h = hot(R);
@@ -106,13 +106,13 @@ export async function render(el) {
       <div class="row"><span class="stamp">Cards ${esc(ago(at))}</span><button class="btn" data-act="refresh">↻ Refresh</button></div></div>
     ${howTo('How it works', `<ol>
       <li><b>Handicappers:</b> Action Network (every 30 minutes), CBS Sports’ experts against the spread (NFL, college), Pickswise’s experts (NFL, college, NBA), Doc’s Sports free picks, and ESPN’s NFL panel (every 2 hours).</li>
-      <li><b>Models</b> (marked “model”): the OddsShark computer on Covers (a predicted score for every game, turned into a spread and a total pick when it’s half a point or more off DraftKings), and the Dimers and ESPN win-chance models, which only pick a moneyline when they rate a side 3+ points higher than DraftKings’ price implies.</li>
+      <li><b>Models</b> (marked “model”): the OddsShark computer on Covers (a predicted score for every game, turned into a spread and a total pick when it’s half a point or more off DraftKings), the Dunkel Index power ratings (a spread and a total pick on every NFL, college and NBA game), and the Dimers and ESPN win-chance models, which only pick a moneyline when they rate a side 3+ points higher than DraftKings’ price implies.</li>
       <li>ESPN’s panel only picks winners, not spreads, so it shows as its own line on each game and doesn’t count toward loud.</li>
       <li>Loud sides are graded after the final at the median number among the handicappers on it. Each handicapper shows two records: the longer one (CBS’s season against the spread, ESPN’s season picking winners, or picks graded here) and, in parentheses, the last 30 days. CBS’s last 30 days come from its own weekly pages; Action publishes only last month; everyone else is graded here, so until a source has 30 days of grading it says “since” the date it started.</li>
       <li><b>Follow</b> anyone with ☆; they’re starred, highlighted and listed first. Names in <b class="gold">gold</b> are hitting 60%+ (last 30 days with 10+ decisions, or the longer record with 30+). No unit records: units depend on bet sizing and are easy to dress up.</li>
       <li>Every source is graded here after the final, so the Handicappers tab shows who actually wins. SportsLine and Covers’ own experts sit behind a login or load in the browser, so they aren’t included.</li></ol>`, 'capn')}
     <div class="grid g4" style="margin-bottom:14px">
-      <div class="card stat"><div class="k">Handicappers</div><div class="v num">${experts.size}</div><div class="s">Action, CBS, Pickswise, Doc’s, ESPN + 3 models</div></div>
+      <div class="card stat"><div class="k">Handicappers</div><div class="v num">${experts.size}</div><div class="s">Action, CBS, Pickswise, Doc’s, ESPN + 4 models</div></div>
       <div class="card stat"><div class="k">Open picks</div><div class="v num">${open.length}</div><div class="s">${esc(LGS.find((x) => x[0] === st.lg)[1])}, not yet played</div></div>
       <div class="card stat"><div class="k">Loudest stack</div><div class="v num">${loud[0] ? loud[0].picks.length : '—'}</div><div class="s">${loud[0] ? esc(sideLabel(games.get(loud[0].gid), loud[0].mk, loud[0].side) + ' · ' + MKN[loud[0].mk]) : 'needs 3 on one side'}</div></div>
       <div class="card stat"><div class="k">Popular record</div><div class="v num">${lw + ll ? `${lw}–${ll}${lp ? '–' + lp : ''}` : '—'}</div><div class="s">loud sides, finals only</div></div>
@@ -131,7 +131,7 @@ export async function render(el) {
       </div>`).join('') || '<div class="empty">No open picks yet for this league.</div>'}</div></div>`
     : `<div class="sec"><h2>Handicappers</h2><p class="sub">Tap ☆ to follow someone; followed handicappers are starred and listed first on every card. <b class="gold">Gold</b> names are hitting 60%+ over the last 30 days (10+ decisions) or over their longer record (30+). Win–loss only: units depend on how each one sizes bets, so they aren’t shown. ESPN’s panel picks winners straight up (no spread), so it’s listed last and never turns gold.</p>
       <div class="card" style="padding:4px 12px;overflow-x:auto"><table class="t"><tr><th>Handicapper</th><th>Source</th><th class="r">Record</th><th class="r">Last 30 days</th></tr>
-      ${board.map(({ e, R }) => { const f = follows.has(String(e.id)), h = hot(R); return `<tr><td>${star(e.id)}<b class="${f || h ? 'gold' : ''}">${esc(e.name)}</b></td><td><span class="chip">${SRC[e.source] ?? e.source}</span></td>
+      ${board.map(({ e, R }) => { const f = follows.has(String(e.id)), h = hot(R); return `<tr><td>${star(e.id)}<b class="${f || h ? 'gold' : ''}">${esc(e.name)}</b></td><td><span class="chip">${SRC[e.source] ?? e.source}${MODEL.has(e.source) ? ' model' : ''}</span></td>
         <td class="r num">${R.long ? `${rt(R.long)}<div class="dim" style="font-size:12px">${R.long.w + R.long.l ? Math.round(rp(R.long) * 100) + '% · ' : ''}${esc(R.longLab)}</div>` : '<span class="dim">—</span>'}</td>
         <td class="r num">${R.l30 ? `<b class="${!R.su && rp(R.l30) >= 0.6 && R.l30.w + R.l30.l >= 10 ? 'gold' : rp(R.l30) < 0.5 ? 'clay' : ''}">${rt(R.l30)}</b><div class="dim" style="font-size:12px">${R.l30.w + R.l30.l ? Math.round(rp(R.l30) * 100) + '% · ' : ''}${esc(R.l30Lab === 'L30' ? (e.source === 'action' ? 'last month, per Action' : e.source === 'cbs' ? 'last 5 CBS weeks' : 'graded here') : R.l30Lab)}</div>` : '<span class="dim">—</span>'}</td></tr>`; }).join('')}
       </table></div></div>`}

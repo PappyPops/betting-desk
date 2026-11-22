@@ -1,6 +1,7 @@
-import { games, blob, api, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, copy } from './core.js?v=202611201527';
-import { nflHist } from './hist.js?v=202611201527';
-import { trackBtn } from './mybets.js?v=202611201527';
+import { games, blob, api, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, copy } from './core.js?v=202611221317';
+import { nflHist } from './hist.js?v=202611221317';
+import { trackBtn } from './mybets.js?v=202611221317';
+import { roundRobin, decOf, amOf } from './rr.js?v=202611221317';
 
 const GROUP = (pos) => pos === 'QB' ? 'QB' : pos === 'TE' ? 'TE' : pos === 'WR' ? 'WR' : 'RB';
 const K_RUSH = 60, K_REC = 50, K_OPP = 8;
@@ -66,7 +67,7 @@ function lambda(m, players, pid, opp, implied, boost = null, back = null) {
 const toP = (lam, cal = 1) => 1 - Math.exp(-lam * cal);
 
 export async function render(el) {
-  const st = { view: store.get('rz:view', 'board') };
+  const st = { view: store.get('rz:view', 'board'), rr: { n: store.get('rz:rrN', 4), stake: store.get('rz:rrStake', 5), mode: store.get('rz:rrMode', 'all'), sel: null, odds: new Map() } };
   el.innerHTML = '<div class="loading">Reading the box scores…</div>';
   const [pb, h] = await Promise.all([blob('nfl_players_2026', 3 * 3600_000), nflHist()]);
   if (!pb) { el.innerHTML = '<div class="err">Player stats haven’t loaded yet. Check back in a few minutes.</div>'; return; }
@@ -77,15 +78,17 @@ export async function render(el) {
   const now = new Date();
   const live = await games({ league: 'nfl', from: new Date(now.getTime() - 5 * 3600e3).toISOString(), to: new Date(now.getTime() + 9 * 86400e3).toISOString() });
   // injury report (ESPN, saved with the prop lines) and ESPN id -> nflverse id
-  const [ctxRows, ath] = await Promise.all([
+  const [ctxRows, ath, tdRows] = await Promise.all([
     api('game_context?select=game_id,injuries&limit=500', { ttl: 600_000 }).catch(() => []),
-    (async () => { const out = []; for (let off = 0; off < 8000; off += 1000) { const p = await api(`athletes?select=id,gsis,team&gsis=not.is.null&offset=${off}&limit=1000`, { ttl: 3600_000 }).catch(() => []); out.push(...p); if (p.length < 1000) break; } return out; })(),
+    (async () => { const out = []; for (let off = 0; off < 8000; off += 1000) { const p = await api(`athletes?select=id,gsis,team&gsis=not.is.null&offset=${off}&limit=1000`, { ttl: 3600_000 }).catch(() => []); out.push(...p); if (p.length < 1000) break; } return out; })(),,
+    api('td_odds?select=game_id,athlete_id,american&american=not.is.null', { ttl: 300_000 }).catch(() => [])
   ]);
   const gsisOf = new Map(ath.map((a) => [String(a.id), a.gsis]));
   const espnOf = new Map(ath.map((a) => [a.gsis, String(a.id)]));
   const rosterTeam = new Map(ath.map((a) => [a.gsis, a.team]));
   const injBy = new Map(ctxRows.map((c) => [String(c.game_id), (c.injuries || []).map((x) => ({ ...x, gsis: gsisOf.get(String(x.id)) })).filter((x) => x.gsis)]));
   const OUT = /^(out|doubtful|injured reserve|ir|suspension|pup)/i;
+  const tdOdds = new Map(tdRows.map((r) => [`${r.game_id}|${r.athlete_id}`, Number(r.american)]));
 
   // ---- backtest: each past week from earlier weeks only, against the closing line ----
   const groups = ['RB', 'WR', 'TE', 'QB'];
@@ -174,6 +177,13 @@ export async function render(el) {
   const allTop2 = weekly.reduce((a, w) => ({ hit: a.hit + w.hit, tot: a.tot + w.tot }), { hit: 0, tot: 0 });
 
   const byKey = new Map(); for (const c of cards) for (const x of c.all) byKey.set(`${c.g.id}|${x.pid}`, { x, c });
+  // round robin candidates: players in games not yet started, with DraftKings' anytime price when the feed has it
+  const rrPool = cards.filter((c) => c.g.state === 'pre').flatMap((c) => c.all.slice(0, 6).map((x) => {
+    const am = tdOdds.get(`${c.g.id}|${espnOf.get(x.pid)}`) ?? null;
+    return { x, c, key: `${c.g.id}|${x.pid}`, am, ev: am !== null ? x.p * decOf(am) - 1 : null };
+  })).sort((a, b) => ((b.ev ?? -9) - (a.ev ?? -9)) || (b.x.p - a.x.p));
+  // suggested legs: best value first (best chance when there's no price), one player per game so the legs don't move together
+  const suggest = (n) => { const seen = new Set(), out = []; for (const r of rrPool) { if (seen.has(r.c.g.id)) continue; seen.add(r.c.g.id); out.push(r.key); if (out.length >= n) break; } return new Set(out); };
   const ord = (n) => n + (n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th');
   const calNote = (g) => { const c = cal[g]; if (!c.n) return ''; const d = c.act / c.n - c.pred / c.n; return Math.abs(d) < 0.015 ? '' : d < 0 ? `${g} forecasts have run high this season, so the chance is marked down.` : `${g} forecasts have run low this season, so the chance is marked up.`; };
   const conf = (x) => x.L.gp >= 6 && !x.boostNote && !x.status && !x.L.returning ? 'High' : x.L.gp < 3 || x.status ? 'Low' : 'Medium';
@@ -214,6 +224,52 @@ export async function render(el) {
       ${x.status ? ` <span class="chip clay" style="font-size:10px">${esc(x.status)}</span>` : ''}${x.boostNote ? ' <span class="chip gold" style="font-size:10px">more work</span>' : ''}${x.L.returning ? ' <span class="chip" style="font-size:10px">back</span>' : ''}<div class="dim" style="font-size:12px">${x.L.eC >= 1 ? `${x.L.eC.toFixed(1)} carries` : ''}${x.L.eC >= 1 && x.L.eT >= 1 ? ' · ' : ''}${x.L.eT >= 1 ? `${x.L.eT.toFixed(1)} targets` : ''} · ${x.L.sRT + x.L.sCT} TD in ${x.L.gp} · last 4: ${x.L.last.join(', ')}</div></span></span>
     <span style="text-align:right"><b class="disp num" style="font-size:22px">${pct(x.p)}</b><div class="dim" style="font-size:11px">${x.L.fOpp > 1.1 ? 'soft defense' : x.L.fOpp < 0.9 ? 'tough defense' : ''}${x.L.fTeam > 1.1 ? ' · high total' : x.L.fTeam < 0.9 ? ' · low total' : ''}</div></span></div>`;
 
+  const money = (v) => `$${v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(2)}`;
+  const RRMODES = (n) => [['all', 'Everything'], ['par', 'Parlays (2s up)'], ...Array.from({ length: n - 2 }, (_, i) => [`k${i + 2}`, `By ${i + 2}s`]), [`k${n}`, `Full ${n}-leg`]];
+  const sizesFor = (mode, n) => mode === 'all' ? Array.from({ length: n }, (_, i) => i + 1) : mode === 'par' ? Array.from({ length: n - 1 }, (_, i) => i + 2) : [Number(mode.slice(1))];
+  function rrHtml() {
+    const R = st.rr; if (!rrPool.length) return '';
+    if (!R.sel) R.sel = suggest(R.n);
+    const shown = [...new Set([...rrPool.filter((r) => R.sel.has(r.key)), ...rrPool.slice(0, 14)])];
+    const legs = rrPool.filter((r) => R.sel.has(r.key)).map((r) => { const am = R.odds.get(r.key) ?? r.am; return { ...r, useAm: am, dec: am !== null ? decOf(am) : 1 / r.x.p, priced: am !== null }; });
+    const n = legs.length;
+    let mode = R.mode; if (n < 2) mode = 'all'; else if (/^k/.test(mode) && Number(mode.slice(1)) > n) mode = `k${n}`;
+    const res = n ? roundRobin(legs.map((l) => ({ p: l.x.p, dec: l.dec })), sizesFor(mode, n), R.stake) : null;
+    const compare = n >= 2 ? RRMODES(n).map(([k, lab]) => ({ k, lab, r: roundRobin(legs.map((l) => ({ p: l.x.p, dec: l.dec })), sizesFor(k, n), R.stake) })) : [];
+    const unpriced = legs.filter((l) => !l.priced).length;
+    return `<div class="sec"><h2>Round robin builder</h2><p class="sub">Pick the legs (suggested: best value against DraftKings’ anytime price, one player per game), set the dollars per bet, and see what each outcome pays and what the whole ticket is expected to return. Chances are this page’s calibrated forecasts; legs are treated as independent.</p>
+      <div class="card">
+        <div class="row" style="gap:10px;flex-wrap:wrap;margin-bottom:10px"><span class="dim" style="font-size:13px">Suggest</span>${seg('rrN', [[3, '3'], [4, '4'], [5, '5'], [6, '6']].map(([a, b]) => [String(a), b]), String(R.n))}
+          <span class="dim" style="font-size:13px">$ per bet</span><input data-rr="stake" class="num" value="${R.stake}" style="width:64px;background:transparent;color:inherit;border:1px solid var(--line2);border-radius:6px;padding:3px 6px"></div>
+        <div style="overflow-x:auto"><table class="t"><tr><th></th><th>Player</th><th class="r">Chance</th><th class="r">Fair</th><th class="r">Book price</th><th class="r">Value</th></tr>
+        ${shown.map((r) => { const on = R.sel.has(r.key), am = R.odds.get(r.key) ?? r.am, ev = am !== null ? r.x.p * decOf(am) - 1 : null; return `<tr style="${on ? 'background:#f0b42914' : ''}"><td><input type="checkbox" data-rrsel="${esc(r.key)}" ${on ? 'checked' : ''}></td>
+          <td><b>${esc(r.x.name)}</b> <span class="dim" style="font-size:12px">${esc(r.x.pos)} · ${esc(r.c.g.data.away.abbr)} @ ${esc(r.c.g.data.home.abbr)}</span></td>
+          <td class="r num">${pct(r.x.p)}</td><td class="r num dim">${amOf(1 / r.x.p) > 0 ? '+' : ''}${amOf(1 / r.x.p)}</td>
+          <td class="r"><input data-rrodds="${esc(r.key)}" class="num" placeholder="${r.am === null ? 'enter' : ''}" value="${am !== null ? (am > 0 ? '+' + am : am) : ''}" style="width:62px;text-align:right;background:transparent;color:inherit;border:1px solid var(--line2);border-radius:6px;padding:2px 5px"></td>
+          <td class="r num ${ev === null ? 'dim' : ev > 0 ? 'mint' : 'clay'}">${ev === null ? '—' : `${ev > 0 ? '+' : ''}${Math.round(ev * 100)}%`}</td></tr>`; }).join('')}</table></div>
+        ${unpriced ? `<p class="dim" style="font-size:12.5px;margin:8px 0 0">${unpriced} leg${unpriced > 1 ? 's have' : ' has'} no DraftKings price yet, so ${unpriced > 1 ? 'they use' : 'it uses'} the fair price (no edge either way). Type your book’s price to see the real return.</p>` : ''}
+      </div>
+      ${n >= 1 ? `<div class="grid g2" style="margin-top:12px">
+        <div class="card"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><b>${n} legs</b>${n >= 2 ? seg('rrMode', RRMODES(n), mode) : ''}</div>
+          <div class="grid g3" style="margin:10px 0"><div class="stat"><div class="k">Bets · cost</div><div class="v num" style="font-size:20px">${res.bets} · ${money(res.cost)}</div></div>
+            <div class="stat"><div class="k">Expected return</div><div class="v num" style="font-size:20px">${money(res.er)}</div></div>
+            <div class="stat"><div class="k">Expected profit</div><div class="v num ${res.ev >= 0 ? 'mint' : 'clay'}" style="font-size:20px">${res.ev >= 0 ? '+' : '−'}${money(Math.abs(res.ev))}</div><div class="s">${res.ev >= 0 ? '+' : ''}${(res.ev / res.cost * 100).toFixed(1)}% of cost</div></div></div>
+          <table class="t"><tr><th>Legs that score</th><th class="r">Chance</th><th class="r">Pays</th><th class="r">Profit</th></tr>
+          ${res.byHits.map((h, k) => ({ h, k })).reverse().map(({ h, k }) => `<tr><td>${k === n ? `All ${n}` : k}</td><td class="r num">${pct(h.prob, h.prob < 0.01 ? 1 : 0)}</td><td class="r num">${money(h.pay)}</td><td class="r num ${h.pay - res.cost >= 0 ? 'mint' : 'clay'}">${h.pay - res.cost >= 0 ? '+' : '−'}${money(Math.abs(h.pay - res.cost))}</td></tr>`).join('')}</table>
+          <p class="dim" style="font-size:12px;margin:6px 0 0">“Pays” is the average payout when exactly that many score, weighted by which players are likeliest to be the ones who do.</p></div>
+        ${compare.length ? `<div class="card"><b>Every way to bet these ${n}</b><table class="t" style="margin-top:8px"><tr><th>Ticket</th><th class="r">Bets</th><th class="r">Cost</th><th class="r">Expected return</th><th class="r">Edge</th></tr>
+          ${compare.map(({ k, lab, r }) => `<tr style="${k === mode ? 'background:#f0b42914' : ''}"><td>${esc(lab)}</td><td class="r num">${r.bets}</td><td class="r num">${money(r.cost)}</td><td class="r num">${money(r.er)}</td><td class="r num ${r.ev >= 0 ? 'mint' : 'clay'}">${r.ev >= 0 ? '+' : ''}${(r.ev / r.cost * 100).toFixed(1)}%</td></tr>`).join('')}</table>
+          <p class="dim" style="font-size:12px;margin:6px 0 0">Bigger parlays multiply each leg’s edge, good or bad: if most legs are priced below their chance, the full parlay loses the most; if they’re priced above it, it gains the most, with far more variance.</p></div>` : ''}
+      </div>` : ''}</div>`;
+  }
+  function wireRR() {
+    const R = st.rr;
+    onSeg(el, 'rrN', (v) => { R.n = Number(v); store.set('rz:rrN', R.n); R.sel = suggest(R.n); draw(); });
+    onSeg(el, 'rrMode', (v) => { R.mode = v; store.set('rz:rrMode', v); draw(); });
+    el.querySelectorAll('[data-rrsel]').forEach((b) => b.onchange = () => { const k = b.dataset.rrsel; if (b.checked) { if (R.sel.size < 8) R.sel.add(k); } else R.sel.delete(k); draw(); });
+    el.querySelectorAll('[data-rrodds]').forEach((b) => b.onchange = () => { const v = Number(String(b.value).replace(/[^0-9+-]/g, '')); if (Number.isFinite(v) && Math.abs(v) >= 100) R.odds.set(b.dataset.rrodds, v); else R.odds.delete(b.dataset.rrodds); draw(); });
+    const sk = el.querySelector('[data-rr=stake]'); if (sk) sk.onchange = () => { const v = Number(sk.value); if (v > 0) { R.stake = v; store.set('rz:rrStake', v); } draw(); };
+  }
   function draw() {
     el.innerHTML = `
     <div class="ph"><div><div class="kicker">NFL · Week ${Number.isFinite(wk) ? wk : ''}</div><h1>Redzone</h1><p>Anytime touchdown board: each player’s chance of scoring at least once, from his role, the matchup, and the game’s betting total.</p></div>
@@ -232,6 +288,7 @@ export async function render(el) {
     <div class="row" style="margin:14px 0">${seg('view', [['board', 'By game'], ['week', 'Week by week']], st.view)}</div>
     ${st.view === 'board' ? `
       ${locks.length ? `<div class="sec" style="margin-top:0"><h2>Best bets to score</h2><div class="grid g2">${locks.map((x) => `<div class="card hl">${pCard(x)}<div style="margin-top:6px"><button class="btn" data-copy="${esc(`${x.name} anytime TD`)}">Copy</button></div></div>`).join('')}</div></div>` : ''}
+      ${rrHtml()}
       <div class="sec"><h2>Every game</h2><div class="grid g2">${cards.map((c) => `<div class="card">
         <div class="row" style="justify-content:space-between;font-size:13px"><span>${esc(c.g.data.away.short)} @ ${esc(c.g.data.home.short)}</span><span class="dim">${esc(fmtDay(c.g.start_time))} ${esc(fmtTime(c.g.start_time))}</span></div>
         <div class="dim" style="font-size:12px;margin:4px 0">O/U ${c.g.total ?? '—'} · ${esc(c.g.data.home.abbr)} ${c.g.spread_home ?? ''}${c.sides[0][2] !== null ? ` · implied ${esc(c.g.data.away.abbr)} ${c.sides[1][2].toFixed(1)}, ${esc(c.g.data.home.abbr)} ${c.sides[0][2].toFixed(1)}` : ''}</div>
@@ -244,6 +301,7 @@ export async function render(el) {
       ${weekly.map((w) => `<tr><td>Week ${w.wk}</td><td class="r num">${w.hit} of ${w.tot}</td><td class="r num">${pct(w.tot ? w.hit / w.tot : null)}</td></tr>`).join('')}</table></div></div>`}
     ${footNote('Player stats: nflverse (open data), refreshed daily. Lines: DraftKings via ESPN. Estimates for entertainment, not a sportsbook price.')}`;
     onSeg(el, 'view', (v) => { st.view = v; store.set('rz:view', v); draw(); });
+    if (st.view === 'board') wireRR();
     el.querySelector('[data-act=refresh]').onclick = () => { clearCache(); render(el); };
     el.querySelectorAll('[data-copy]').forEach((b) => b.onclick = () => copy(b.dataset.copy));
     el.querySelectorAll('[data-rz]').forEach((r) => r.onclick = () => {

@@ -8,6 +8,14 @@ const H = { 'User-Agent': 'BettingDesk/1.0 (personal research)', 'Accept': 'appl
 const CORE = 'https://sports.core.api.espn.com/v2/sports/football/leagues/nfl';
 // ESPN prop type id -> our stat key
 const TYPES: Record<string, string> = { '8': 'pass_yds', '9': 'pass_cmp', '10': 'pass_td', '11': 'rush_att', '12': 'rush_yds', '13': 'rec_yds', '14': 'rec', '16': 'pass_att', '18': 'pass_rush_yds', '20': 'rush_rec_yds' };
+// American odds from an ESPN prop's odds block, wherever it sits (it differs by market)
+function american(o: any): number | null {
+  if (o === null || o === undefined) return null;
+  if (typeof o === 'number') return Number.isFinite(o) && Math.abs(o) >= 100 ? Math.round(o) : null;
+  if (typeof o === 'string') { const n = Number(o.replace(/[^0-9+-]/g, '')); return Number.isFinite(n) && Math.abs(n) >= 100 ? n : null; }
+  if (typeof o === 'object') { for (const k of ['american', 'value', 'alternateDisplayValue', 'displayValue']) if (k in o) { const v = american(o[k]); if (v !== null) return v; } }
+  return null;
+}
 const j = async (u: string) => { const r = await fetch(u, { headers: H, signal: AbortSignal.timeout(15000) }); if (!r.ok) throw new Error(`${r.status} ${u}`); return r.json(); };
 
 Deno.serve(async () => {
@@ -18,10 +26,12 @@ Deno.serve(async () => {
   const seenAth = new Set<string>();
   for (const g of gs ?? []) {
     try {
-      const rows = new Map<string, any>();
+      const rows = new Map<string, any>(), td = new Map<string, any>();
       for (let page = 1; page <= 3; page++) {
         const d = await j(`${CORE}/events/${g.id}/competitions/${g.id}/odds/100/propBets?lang=en&region=us&limit=1000&page=${page}`);
         for (const x of d.items ?? []) {
+          // anytime touchdown scorer (type 31): keep the price, for Redzone's round robin
+          if (String(x.type?.id) === '31') { const aid = String(x.athlete?.$ref ?? '').match(/athletes\/(\d+)/)?.[1]; const am = american(x.odds) ?? american(x.current?.odds) ?? american(x.current); if (aid) td.set(aid, { game_id: g.id, athlete_id: aid, american: am, raw: { odds: x.odds ?? null, current: x.current ?? null }, updated_at: now.toISOString() }); continue; }
           const stat = TYPES[String(x.type?.id)]; if (!stat) continue;
           const aid = String(x.athlete?.$ref ?? '').match(/athletes\/(\d+)/)?.[1]; if (!aid) continue;
           const cur = Number(x.current?.target?.value), op = Number(x.open?.target?.value);
@@ -32,6 +42,7 @@ Deno.serve(async () => {
         if (page >= (d.pageCount ?? 1)) break;
       }
       if (rows.size) { const { error } = await sb.from('props').upsert([...rows.values()]); if (error) out.errors.push(error.message); }
+      if (td.size) { const { error } = await sb.from('td_odds').upsert([...td.values()]); if (error) out.errors.push('td ' + error.message); out.td = (out.td ?? 0) + td.size; }
       // injuries and the weather forecast for the game (ESPN game summary)
       try {
         const sum = await j(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${g.id}`);

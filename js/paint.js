@@ -1,4 +1,4 @@
-import { games, api, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn } from './core.js?v=202611201527';
+import { games, api, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn } from './core.js?v=202611221317';
 
 // Edges a projection needs over the DraftKings number before it counts as a lock.
 const EDGE = { pre: 5, q1: 6, half: 6, q3: 5 };
@@ -42,11 +42,12 @@ function grade(lean, ln, final) { const d = final - ln; if (d === 0) return 'P';
 
 export async function render(el) {
   const st = { start: store.get('paint:start', 'all'), ev: 'all' };
-  let all = [], breaks = [];
+  let all = [], breaks = [], dunkel = [], DK = new Map();
 
   async function load(quiet) {
     if (!quiet) el.innerHTML = '<div class="loading">Running the numbers…</div>';
-    [all, breaks] = await Promise.all([games({ league: 'nba', from: '2026-10-01', ttl: 60_000 }), api('break_lines?select=*&live_total=not.is.null&limit=10000', { ttl: 60_000 }).catch(() => [])]);
+    [all, breaks, dunkel] = await Promise.all([games({ league: 'nba', from: '2026-10-01', ttl: 60_000 }), api('break_lines?select=*&live_total=not.is.null&limit=10000', { ttl: 60_000 }).catch(() => []), api('dunkel?league=eq.nba&select=*', { ttl: 300_000 }).catch(() => [])]);
+    DK = new Map(dunkel.map((r) => [String(r.game_id), r]));
     draw();
   }
 
@@ -63,6 +64,9 @@ export async function render(el) {
     const sp = { w: 0, l: 0, p: 0 };
     const ydayKey = new Date(now - 86400e3).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
     const yday = [];
+    // Dunkel's own total (the first one it posted) graded against the same closing line
+    const dk = blank();
+    for (const g of finals) { const r = DK.get(String(g.id)); const c = g.close_total > 0 ? Number(g.close_total) : null; if (!r || c === null || Number(r.first_total) === c) continue; tally(dk, grade(Number(r.first_total) > c ? 'Over' : 'Under', c, g.home_score + g.away_score)); }
     for (const g of finals) {
       const ln = g.close_total > 0 ? Number(g.close_total) : null;
       const rt = ratings(finals, new Date(g.start_time).getTime());
@@ -107,7 +111,7 @@ export async function render(el) {
     const rp = (b) => b.w + b.l ? b.w / (b.w + b.l) : null;
 
     const gameCard = (g, kind) => {
-      const pr = project(rt, g.home, g.away); const d = g.data;
+      const pr = project(rt, g.home, g.away); const d = g.data; const dkr = DK.get(String(g.id));
       const ln = g.total !== null ? Number(g.total) : g.close_total > 0 ? Number(g.close_total) : null, spH = g.spread_home !== null ? Number(g.spread_home) : null;
       let projT = pr?.total ?? null, stage = 'Pregame';
       if (kind === 'live' && pr) {
@@ -128,10 +132,12 @@ export async function render(el) {
         <div class="row" style="justify-content:space-between;font-size:13px"><span>${kind === 'live' ? `<span class="pill-live">${esc(stage)}</span>` : `${esc(fmtDay(g.start_time))} · ${esc(fmtTime(g.start_time))}`}</span><span class="dim">${esc((d.bcast || []).join(', '))}</span></div>
         <div class="row" style="justify-content:space-between;margin-top:8px"><span class="team">${logo(d.away)}<span><b>${esc(d.away.short)}</b> <span class="dim">${esc(d.away.rec || '')}</span></span></span>${kind === 'live' ? `<b class="disp num" style="font-size:22px">${d.away.score ?? 0}</b>` : `<span class="num dim">${pr ? pr.ap.toFixed(0) : ''}</span>`}</div>
         <div class="row" style="justify-content:space-between"><span class="team">${logo(d.home)}<span><b>${esc(d.home.short)}</b> <span class="dim">${esc(d.home.rec || '')}</span></span></span>${kind === 'live' ? `<b class="disp num" style="font-size:22px">${d.home.score ?? 0}</b>` : `<span class="num dim">${pr ? pr.hp.toFixed(0) : ''}</span>`}</div>
-        <div class="grid" style="grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px">
+        <div class="grid" style="grid-template-columns:repeat(${dkr ? 4 : 3},1fr);gap:8px;margin-top:10px">
           <div class="stat"><div class="k">${kind === 'live' ? 'Pregame total' : 'DK total'}</div><div class="v num" style="font-size:24px">${ln ?? '—'}</div></div>
           <div class="stat"><div class="k">Projected</div><div class="v num" style="font-size:24px">${projT !== null ? projT.toFixed(1) : '—'}</div></div>
+          ${dkr ? `<div class="stat"><div class="k">Dunkel</div><div class="v num" style="font-size:24px">${Number(dkr.dunkel_total)}</div></div>` : ''}
           <div class="stat"><div class="k">Edge</div><div class="v num ${lean ? 'gold' : 'dim'}" style="font-size:24px">${edge !== null ? sgn(edge) : '—'}</div></div></div>
+        ${kind === 'pre' && dkr && ln !== null && projT !== null ? (() => { const a = projT > ln ? 'Over' : 'Under', b = Number(dkr.dunkel_total) > ln ? 'Over' : Number(dkr.dunkel_total) < ln ? 'Under' : null; return b ? `<div style="font-size:12.5px;margin-top:6px" class="${a === b ? 'mint' : 'dim'}">${a === b ? `Both models lean <b>${a}</b> ${ln}` : `Models split: this one ${a}, Dunkel ${b}`}</div>` : ''; })() : ''}
         ${kind === 'live' ? (bk ? `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--line2);font-size:13px"><b>${esc(bk.lab)}:</b> DraftKings live total <b class="num">${bk.lt}</b>, projected <b class="num">${bk.pj.toFixed(1)}</b> (${sgn(bk.e)}) ${bk.lean ? `<span class="chip gold">${bk.lean} ${bk.lt}</span>` : `<span class="dim">no lock, needs ${EDGE[bk.k]}+</span>`}${bk.ls !== null ? `<div class="dim" style="font-size:12.5px">Live spread ${esc(d.home.abbr)} ${line(Number(bk.ls))}; projected margin ${esc(d.home.abbr)} ${sgn(bk.pm, 1)}</div>` : ''}</div>` : `<div class="dim" style="font-size:12.5px;margin-top:8px">Projected final from the score so far. DraftKings’ live line is saved at each quarter break and compared here.</div>`)
           : lean ? `<div style="margin-top:8px"><span class="chip gold">${lean} ${ln}</span></div>` : `<div class="dim" style="font-size:12.5px;margin-top:8px">${pr ? `No total lock. Needs ${need}+ points of edge.` : 'Not enough games yet to project.'}</div>`}
         ${kind === 'pre' && spLean ? `<div class="dim" style="font-size:12.5px;margin-top:4px">Spread lean: <b class="muted">${esc(spLean.short)} ${line(spLine)}</b> (projected margin ${sgn(pr.margin, 1)} for ${esc(d.home.abbr)})</div>` : ''}
@@ -146,8 +152,9 @@ export async function render(el) {
       <li><b>At each break:</b> points so far plus a projection for the rest, leaning more on the live pace as the game goes on. Locks need ${EDGE.q1}+ (1Q, half) or ${EDGE.q3}+ (3Q).</li>
       <li><b>The book</b> grades every pregame lock this season against the closing total, using only games played before that day. At −110 you need ${pct(BE, 1)}. Quarter-break projections are graded against DraftKings’ live line saved at that break.</li></ol>`, 'paint')}
     <div class="sec" style="margin-top:0"><h2>The book</h2><p class="sub">Every pregame lock this season, using only games played before that day, graded against the DraftKings close.</p>
-    <div class="grid g4">
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr))">
       <div class="card stat"><div class="k">Pregame totals</div><div class="v num">${rec(book.pre)}</div><div class="s ${rp(book.pre) !== null && rp(book.pre) > BE ? 'mint' : 'clay'}">${pct(rp(book.pre), 1)} · break-even ${pct(BE, 1)}</div></div>
+      <div class="card stat"><div class="k">Dunkel totals</div><div class="v num">${rec(dk)}</div><div class="s ${rp(dk) !== null && rp(dk) > BE ? 'mint' : 'clay'}">${dk.w + dk.l ? pct(rp(dk), 1) + ' · ' : ''}its first number vs the close, since Nov 22</div></div>
       <div class="card stat"><div class="k">Pregame overs</div><div class="v num">${book.pre.ow + book.pre.ol ? `${book.pre.ow}–${book.pre.ol}` : '—'}</div><div class="s">unders ${book.pre.w - book.pre.ow}–${book.pre.l - book.pre.ol}</div></div>
       <div class="card stat"><div class="k">Spread leans</div><div class="v num">${rec(sp)}</div><div class="s">${pct(rp(sp), 1)} · ${SPREAD_EDGE}+ points off the close</div></div>
       <div class="card stat"><div class="k">Halftime locks</div><div class="v num">${rec(brk.half.lock)}</div><div class="s">vs the live total · ${brk.half.n} halves logged</div></div>
