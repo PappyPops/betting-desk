@@ -2,7 +2,7 @@
 // Everything is put on one scale X (the final total, or your side's margin) where your bet wins above `a` and the
 // hedge wins below `b`. If a < b there's a middle (both win); if a > b there's a gap where both lose.
 // Chances come from the live number itself (the market's best guess) with a spread that shrinks as the game runs out.
-import { esc, store } from './core.js?v=202611221424';
+import { esc, store } from './core.js?v=202611221426';
 
 export const decOf = (am) => am > 0 ? 1 + am / 100 : 1 + 100 / -am;
 const SD = { nfl: { tot: 13.5, sp: 13.5 }, cfb: { tot: 16, sp: 15.5 }, nba: { tot: 17, sp: 12.5 }, cbb: { tot: 14, sp: 11 } };

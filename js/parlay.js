@@ -2,8 +2,8 @@
 // A leg's chance starts from the market's own price with the book's cut removed (a coin flip at -110/-110).
 // When the Today page's best bets back that exact side, its graded edge is added. The ticket's chance is the legs
 // multiplied together, which is right for different games; same-game legs get flagged because they move together.
-import { games, esc, logo, line, odds, pct, decOdds, fmtDay, fmtTime, store, copy } from './core.js?v=202611221424';
-import { bestBets } from './bets.js?v=202611221424';
+import { games, esc, logo, line, odds, pct, decOdds, fmtDay, fmtTime, store, copy } from './core.js?v=202611221426';
+import { bestBets } from './bets.js?v=202611221426';
 
 const LG = [['nfl', 'NFL'], ['cfb', 'College FB'], ['nba', 'NBA']];
 const amOf = (dec) => dec >= 2 ? Math.round((dec - 1) * 100) : Math.round(-100 / (dec - 1));
@@ -82,7 +82,7 @@ export async function mountParlay(el) {
         <div class="stat"><div class="k">Book pays</div><div class="v num" style="font-size:22px">${odds(amOf(bookDec))}</div><div class="s"><input data-p="book" class="num" placeholder="${odds(amOf(decAll))}" value="${st.bookOdds}" style="width:70px;background:transparent;color:inherit;border:1px solid var(--line2);border-radius:6px;padding:1px 5px"> if different</div></div>
         <div class="stat"><div class="k">Ticket value</div><div class="v num ${ev >= 0 ? 'mint' : 'clay'}" style="font-size:22px">${ev >= 0 ? '+' : ''}${(ev * 100).toFixed(1)}%</div><div class="s">per dollar bet</div></div></div>
       <p style="font-size:13.5px;margin:10px 0 0">${ev >= 0.03 ? '<b class="mint">Worth a look.</b> The legs’ edges outweigh the parlay’s built-in cut.' : ev >= 0 ? '<b>Close to even.</b> Small edges multiplied together barely cover the cut.' : `<b class="clay">The book has the edge.</b> Every −110 leg carries about a 4.5% cut, and a parlay multiplies them.`}
-        ${bestDrop && bestDrop.ev > ev + 0.005 ? ` Dropping <b>${esc(bestDrop.x.label)}</b> would take the ticket to ${bestDrop.ev >= 0 ? '+' : ''}${(bestDrop.ev * 100).toFixed(1)}%.` : ''}</p>
+        ${bestDrop && bestDrop.ev > ev + 0.005 && (bestDrop.ev >= 0 || bestDrop.x.value < Math.min(...live.filter((y) => y !== bestDrop.x).map((y) => y.value)) - 0.01) ? ` Dropping <b>${esc(bestDrop.x.label)}</b> would take the ticket to ${bestDrop.ev >= 0 ? '+' : ''}${(bestDrop.ev * 100).toFixed(1)}%.` : ''}</p>
       <div class="row" style="gap:8px;margin-top:10px"><button class="btn" data-p="copy">Copy ticket</button><button class="btn" data-p="clear">Clear</button></div>
     </div>` : '<p class="dim" style="font-size:13px;margin-top:10px">Pick a game above to start a ticket. Up to 10 legs.</p>'}
     <p class="stamp">Chances: the market’s own price with the cut removed, plus the Today page’s graded edge when its best bets back (or oppose) that exact side, capped at 6 points. Different games are multiplied as independent; same-game legs are flagged instead of modeled.</p>`;
