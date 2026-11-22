@@ -1,6 +1,7 @@
 // What's new: the changes worth knowing about, newest first. Add an entry for each real feature, not for fixes.
 // tool = the page it links to (the sidebar id), or null.
 export const NEWS = [
+  { date: '2026-11-22', tool: 'court', title: 'Full Court: college basketball', text: 'Every Division I game rated (adjusted for who each team played), with the Dunkel Index as a second opinion. By default it shows only games where the numbers are well off DraftKings, gold when Dunkel agrees, and grades itself at the close every night.' },
   { date: '2026-11-22', tool: 'tease', title: 'Parlay checker', text: 'Tease Me has a Parlays tab: build a ticket from any NFL, college or NBA game and see each leg’s real chance, the fair price vs what the book pays, same-game warnings, and which leg to drop.' },
   { date: '2026-11-22', tool: 'mybets', title: 'Hedge and middle finder', text: 'Tap Hedge on any open spread, total or moneyline in My Bets (or use the calculator). It finds the middle window where both bets win, the chance of landing in it, and what each hedge size pays in every outcome.' },
   { date: '2026-11-22', tool: 'linelife', title: 'Line timelines', text: 'Tap any game (or Timeline on a card) to see every line change since the open, with fast moves that held marked in gold and a plain summary of how it got there.' },

@@ -1,4 +1,4 @@
-// The Dunkel Index: free power-rating predictions for NFL, FBS and NBA (dunkelindex.com/picks/<league>).
+// The Dunkel Index: free power-rating predictions for NFL, FBS, NBA and college basketball (dunkelindex.com/picks/<league>).
 // Each game shows Dunkel's predicted winner, margin and total next to Vegas, plus a spread pick and a total pick.
 // Saves the numbers per game (In the Paint shows Dunkel's NBA total beside its own) and the picks to Cap'n Cash,
 // where the picks job grades them against ESPN finals like every other source.
@@ -12,7 +12,7 @@ function hid(s: string) {
   for (let i = 0; i < s.length; i++) { a = Math.imul(a ^ s.charCodeAt(i), 16777619) >>> 0; b = Math.imul(b ^ s.charCodeAt(i), 2246822519) >>> 0; }
   return 4e15 + (a % 2 ** 20) * 2 ** 26 + (b % 2 ** 26);
 }
-const PAGE: Record<string, string> = { nfl: 'nfl', cfb: 'fbs', nba: 'nba' };
+const PAGE: Record<string, string> = { nfl: 'nfl', cfb: 'fbs', nba: 'nba', cbb: 'ncaa-basketball' };
 const EXPERT = hid('dunkel');
 
 // every way a team might be written: "Buffalo Bills", "Buffalo", "Bills"
@@ -33,7 +33,7 @@ async function league(lg: string) {
   if (!r.ok) throw new Error(`${r.status}`);
   const text = (await r.text()).replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
   const { data: games } = await sb.from('games').select('id,start_time,state,data').eq('league', lg).eq('state', 'pre')
-    .gte('start_time', new Date(Date.now() - 3600e3).toISOString()).lt('start_time', new Date(Date.now() + 8 * 86400e3).toISOString());
+    .gte('start_time', new Date(Date.now() - 3600e3).toISOString()).lt('start_time', new Date(Date.now() + 8 * 86400e3).toISOString()).limit(3000);
   const chunks = text.split(/Bonus Code:\s*DUNKEL/i);
   const rows = new Map<string, any>(), picks: any[] = [];
   for (const raw of chunks) {
@@ -90,7 +90,7 @@ async function league(lg: string) {
 Deno.serve(async () => {
   const out: Record<string, unknown> = {};
   await sb.from('experts').upsert({ id: EXPERT, name: 'Dunkel Index', username: 'dunkel', source: 'dunkel', updated_at: new Date().toISOString() });
-  for (const lg of ['nfl', 'cfb', 'nba']) {
+  for (const lg of ['nfl', 'cfb', 'nba', 'cbb']) {
     try { out[lg] = await league(lg); } catch (e) { out[lg] = { error: String(e).slice(0, 120) }; }
     await new Promise((r) => setTimeout(r, 1500));
   }

@@ -4,7 +4,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
 const H = { 'User-Agent': 'BettingDesk/1.0 (personal research)', 'Accept': 'application/json' };
-const SPORT: Record<string, string> = { nfl: 'football/nfl', cfb: 'football/college-football', nba: 'basketball/nba' };
+const SPORT: Record<string, string> = { nfl: 'football/nfl', cfb: 'football/college-football', nba: 'basketball/nba', cbb: 'basketball/mens-college-basketball' };
+const CBB = '&groups=50&limit=500'; // every Division I game, not just the featured ones
 const BASE = (lg: string) => `https://site.api.espn.com/apis/site/v2/sports/${SPORT[lg]}/scoreboard`;
 
 const num = (s: unknown): number | null => {
@@ -184,9 +185,13 @@ Deno.serve(async (req) => {
     const weeks = lg === 'nfl' ? 18 : 16;
     const grp = lg === 'cfb' ? '&groups=80&limit=400' : '';
     for (let w = 1; w <= weeks; w++) all.push(...(await pull(lg, `?week=${w}&seasontype=2${grp}`)).ev);
-  } else if (mode === 'nbadays') {
+  } else if (mode === 'cbb') {
+    // college basketball runs on its own schedule (150+ games on a busy day)
+    for (const off of [-1, 0, 1, 2]) all.push(...(await pull('cbb', `?dates=${etDate(off)}${CBB}`)).ev);
+  } else if (mode === 'nbadays' || mode === 'days') {
+    const lg = mode === 'nbadays' ? 'nba' : (u.searchParams.get('lg') ?? 'nba');
     const from = Number(u.searchParams.get('from') ?? -7), to = Number(u.searchParams.get('to') ?? -2);
-    for (let off = from; off <= to; off++) all.push(...(await pull('nba', `?dates=${etDate(off)}`)).ev);
+    for (let off = from; off <= to; off++) all.push(...(await pull(lg, `?dates=${etDate(off)}${lg === 'cbb' ? CBB : ''}`)).ev);
   } else if (mode === 'backfill') {
     const lg = u.searchParams.get('lg') ?? 'nba';
     out.backfilled = await backfill(lg, Number(u.searchParams.get('limit') ?? 150));
