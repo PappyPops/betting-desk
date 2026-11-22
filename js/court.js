@@ -2,9 +2,9 @@
 // model's number is far from DraftKings' (and, best of all, the Dunkel Index agrees) make the default list.
 // Ratings are opponent-adjusted (beating a weak team by 30 says less than beating a good one by 10), from the
 // same engine as the simulator, refit each day with only games already played, and graded against the close.
-import { games, api, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn } from './core.js?v=202611221433';
-import { fit, predict } from './sim.js?v=202611221433';
-import { trackBtn } from './mybets.js?v=202611221433';
+import { games, api, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn } from './core.js?v=202611221443';
+import { fit, predict } from './sim.js?v=202611221443';
+import { trackBtn } from './mybets.js?v=202611221443';
 
 const SEASON_START = '2026-11-01';
 const HALF = 8, LAM = 3;            // ratings: 8-week half-life, light pull toward average
@@ -44,7 +44,7 @@ const rt = (r) => r.w + r.l ? `${r.w}–${r.l}${r.p ? '–' + r.p : ''}` : '—'
 const rp = (r) => r.w + r.l ? r.w / (r.w + r.l) : null;
 
 export async function render(el) {
-  const st = { view: store.get('court:view', 'signals'), when: store.get('court:when', 'today'), q: '' };
+  const st = { view: store.get('court:view2', 'both'), when: store.get('court:when', 'today'), q: '' };
   el.innerHTML = '<div class="loading">Rating 360 teams…</div>';
   const now = Date.now();
   const [all, dk] = await Promise.all([
@@ -124,13 +124,14 @@ export async function render(el) {
       <div class="card stat"><div class="k">Both agree (totals)</div><div class="v num">${rt(both)}</div><div class="s">${both.w + both.l ? pct(rp(both), 1) : 'builds as games are graded'}</div></div></div>
     <div class="card" style="padding:4px 12px;overflow-x:auto;margin-bottom:12px"><table class="t"><tr><th>Model off DraftKings by</th>${[3, 5, 7, 9].map((t) => `<th class="r">Totals ${t}+</th>`).join('')}${[2, 4, 6].map((t) => `<th class="r">Spreads ${t}+</th>`).join('')}</tr>
       <tr><td class="dim">Graded at the close, since Nov 12</td>${[3, 5, 7, 9].map((t) => `<td class="r num">${chip(T(t))}</td>`).join('')}${[2, 4, 6].map((t) => `<td class="r num">${chip(S(t))}</td>`).join('')}</tr></table></div>
+    ${(() => { const t = T(EDGE.tot), sp = S(EDGE.sp), ok = (r) => r.w + r.l >= 150 && rp(r) > BE; return ok(t) && ok(sp) ? '' : `<div class="card" style="border-color:#e0795a88;margin-bottom:12px;font-size:13.5px"><b class="clay">Early season: trust the gold rows first.</b> With only a handful of games per team, this model’s numbers miss by more than DraftKings’ do, and its own signals haven’t proven themselves yet (${rt(t)} on totals, ${rt(sp)} on spreads; it needs 150 graded plays above ${pct(BE, 1)} to count). The default list shows only games where it and the Dunkel Index agree. This note goes away once the record earns it.</div>`; })()}
     <div class="row" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">${seg('when', [['today', 'Today'], ['tmr', 'Tomorrow'], ['all', 'Next 3 days']], st.when)}
       ${seg('view', [['signals', `Signals (${counts.sig})`], ['both', `Dunkel agrees (${counts.both})`], ['all', `All games (${counts.all})`]], st.view)}
       <input data-act="q" placeholder="Find a team" value="${esc(st.q)}" style="min-width:160px"></div>
     <div class="card" style="padding:4px 12px;overflow-x:auto"><table class="t"><tr><th>Tip</th><th>Game</th><th class="r">DraftKings</th><th class="r">Model</th><th class="r">Dunkel</th><th>Signal</th><th></th></tr>
       ${list.map(row).join('') || `<tr><td colspan="7" class="muted">${st.view === 'all' ? 'No games with lines in this window yet. Lines go up through the day.' : 'No signals in this window. Lines go up through the day; check back or switch to All games.'}</td></tr>`}</table></div>
     ${footNote('Scores and lines: ESPN (DraftKings), every 10 minutes. Second opinion: the Dunkel Index. Ratings and grading: this site. Not advice.')}`;
-    onSeg(el, 'view', (v) => { st.view = v; store.set('court:view', v); draw(); });
+    onSeg(el, 'view', (v) => { st.view = v; store.set('court:view2', v); draw(); });
     onSeg(el, 'when', (v) => { st.when = v; store.set('court:when', v); draw(); });
     const q = el.querySelector('[data-act=q]'); q.oninput = () => { st.q = q.value; const pos = q.selectionStart; draw(); const n = el.querySelector('[data-act=q]'); n.focus(); n.setSelectionRange(pos, pos); };
     el.querySelector('[data-act=refresh]').onclick = () => { clearCache(); render(el); };

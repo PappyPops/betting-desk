@@ -1,7 +1,7 @@
-import { games, api, esc, logo, line, sgn, odds, pct, fmtTime, fmtDay, footNote, lastSync, ago, clearCache, howTo, wireHow, SB_URL, SB_KEY } from './core.js?v=202611221433';
-import { bestBets, gradeFinal } from './bets.js?v=202611221433';
-import { trackBtn } from './mybets.js?v=202611221433';
-import { NEWS } from './news.js?v=202611221433';
+import { games, api, esc, logo, line, sgn, odds, pct, fmtTime, fmtDay, footNote, lastSync, ago, clearCache, howTo, wireHow, SB_URL, SB_KEY } from './core.js?v=202611221443';
+import { bestBets, gradeFinal } from './bets.js?v=202611221443';
+import { trackBtn } from './mybets.js?v=202611221443';
+import { NEWS } from './news.js?v=202611221443';
 
 const LG = { nfl: 'NFL', cfb: 'College', nba: 'NBA' };
 
