@@ -1,7 +1,7 @@
 // My Bets: track the bets you actually place from any tool, graded automatically, with units and ROI by tool.
 // Saved in this browser; Export and Import move them to another phone or computer.
-import { mountHedge } from './hedge.js?v=202611221444';
-import { api, blob, esc, fmtDay, fmtTime, pct, odds, store, toast, footNote, seg, onSeg } from './core.js?v=202611221444';
+import { mountHedge } from './hedge.js?v=202611221538';
+import { api, blob, esc, fmtDay, fmtTime, pct, odds, store, toast, footNote, seg, onSeg } from './core.js?v=202611221538';
 
 const KEY = 'mybets';
 export const getBets = () => store.get(KEY, []);
@@ -81,7 +81,10 @@ export async function render(el) {
     for (const b of list) {
       b.result = b.manual || (b.market === 'manual' ? null : gradeOne(b, G.get(String(b.gid)), B.get(String(b.gid))));
       if (!b.result && b.market === 'manual' && b.council) {
-        const c = b.council, r = L.find((x) => x.date === c.date && x.member.toLowerCase() === c.member.toLowerCase() && normPick(x.pick).startsWith(normPick(c.sel)));
+        const c = b.council, mine = L.filter((x) => x.date === c.date && x.member.toLowerCase() === c.member.toLowerCase());
+        const team = (t) => String(t).toLowerCase().replace(/\(late\)/, '').split(/[^a-z]+/).filter((w) => w.length > 2 && !['over', 'under'].includes(w));
+        // a Late Check line change is logged at the new line with "(LATE)"
+        const r = mine.find((x) => normPick(x.pick).startsWith(normPick(c.sel))) || mine.find((x) => /\(late\)/i.test(x.pick) && team(x.pick).some((w) => team(c.sel).includes(w)));
         if (r && ['W', 'L', 'P'].includes(r.result)) b.result = r.result;
       }
     }
