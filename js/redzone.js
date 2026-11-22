@@ -1,7 +1,7 @@
-import { games, blob, api, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, copy } from './core.js?v=202611221317';
-import { nflHist } from './hist.js?v=202611221317';
-import { trackBtn } from './mybets.js?v=202611221317';
-import { roundRobin, decOf, amOf } from './rr.js?v=202611221317';
+import { games, blob, api, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, copy } from './core.js?v=202611221319';
+import { nflHist } from './hist.js?v=202611221319';
+import { trackBtn } from './mybets.js?v=202611221319';
+import { roundRobin, decOf, amOf } from './rr.js?v=202611221319';
 
 const GROUP = (pos) => pos === 'QB' ? 'QB' : pos === 'TE' ? 'TE' : pos === 'WR' ? 'WR' : 'RB';
 const K_RUSH = 60, K_REC = 50, K_OPP = 8;
@@ -80,7 +80,7 @@ export async function render(el) {
   // injury report (ESPN, saved with the prop lines) and ESPN id -> nflverse id
   const [ctxRows, ath, tdRows] = await Promise.all([
     api('game_context?select=game_id,injuries&limit=500', { ttl: 600_000 }).catch(() => []),
-    (async () => { const out = []; for (let off = 0; off < 8000; off += 1000) { const p = await api(`athletes?select=id,gsis,team&gsis=not.is.null&offset=${off}&limit=1000`, { ttl: 3600_000 }).catch(() => []); out.push(...p); if (p.length < 1000) break; } return out; })(),,
+    (async () => { const out = []; for (let off = 0; off < 8000; off += 1000) { const p = await api(`athletes?select=id,gsis,team&gsis=not.is.null&offset=${off}&limit=1000`, { ttl: 3600_000 }).catch(() => []); out.push(...p); if (p.length < 1000) break; } return out; })(),
     api('td_odds?select=game_id,athlete_id,american&american=not.is.null', { ttl: 300_000 }).catch(() => [])
   ]);
   const gsisOf = new Map(ath.map((a) => [String(a.id), a.gsis]));
