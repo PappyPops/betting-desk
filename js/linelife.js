@@ -1,7 +1,7 @@
-import { games, api, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611221405';
-import { flagNow, loadFlags, gradeFlags, TRIG, historyNote, SNAPS_FROM } from './moves.js?v=202611221405';
-import { trackBtn } from './mybets.js?v=202611221405';
-import { nflHist } from './hist.js?v=202611221405';
+import { games, api, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611221406';
+import { flagNow, loadFlags, gradeFlags, TRIG, historyNote, SNAPS_FROM } from './moves.js?v=202611221406';
+import { trackBtn } from './mybets.js?v=202611221406';
+import { nflHist } from './hist.js?v=202611221406';
 
 // Totals rules written up front (not mined from the data), then checked on two separate halves of history.
 export const CUTS = [
@@ -223,19 +223,23 @@ export async function render(el) {
     document.addEventListener('keydown', esc_); ov.onclick = (e) => { if (e.target === ov) close(); };
     const snaps = await api(`line_snaps?select=ts,spread_home,total&game_id=eq.${encodeURIComponent(gid)}&order=ts.asc&limit=5000`, { ttl: 60_000 }).catch(() => []);
     const series = (k) => { const out = []; for (const s0 of snaps) { const v = s0[k]; if (v === null || v === undefined) continue; const n = Number(v), t = new Date(s0.ts).getTime(); if (!out.length || out[out.length - 1].v !== n) out.push({ t, v: n }); }
+      // the feed sometimes flickers between two numbers: a change that comes straight back within an hour is noise
+      for (let again = true; again;) { again = false; for (let i = 1; i < out.length - 1; i++) if (out[i + 1].v === out[i - 1].v && out[i + 1].t - out[i].t < 3600e3) { out.splice(i, 2); again = true; break; } }
       if (out.length && new Date(g.start_time).getTime() > Date.now()) out.push({ t: Date.now(), v: out[out.length - 1].v }); return out; };
     const tot = series('total'), sp = series('spread_home');
     const th = FAST[st.lg] ?? FAST.nfl, sT = split(tot, th.tot), sS = split(sp, th.sp);
     const d = g.data, hs = (v) => `${d.home.abbr} ${line(v)}`;
-    const story = (s0, pts, lab, fmt) => { if (pts.length < 2) return ''; const net = pts[pts.length - 1].v - pts[0].v; if (!net && !s0.jumps.length) return `<li><b>${lab}:</b> hasn’t moved since it was first saved.</li>`;
-      return `<li><b>${lab}:</b> ${fmt(pts[0].v)} → ${fmt(pts[pts.length - 1].v)}. ${s0.jumps.length ? `${s0.jumps.length} fast jump${s0.jumps.length > 1 ? 's' : ''} (${s0.jumps.slice(0, 4).map((j) => `${esc(fmtDay(new Date(j.t).toISOString()))} ${esc(fmtTime(new Date(j.t).toISOString()))} ${sgn(j.dv)}`).join(', ')}${s0.jumps.length > 4 ? '…' : ''}) moved it ${sgn(s0.fast)}; slow drift moved it ${sgn(s0.drift)}.` : `All drift, no fast jumps (${sgn(net)}).`}</li>`; };
+    const story = (s0, pts, lab, fmt, open) => { if (pts.length < 2) return ''; const net = pts[pts.length - 1].v - pts[0].v;
+      const pre = open !== null && open !== undefined && Number(open) !== pts[0].v ? ` It had already moved ${fmt(Number(open))} → ${fmt(pts[0].v)} before every change was being saved.` : '';
+      if (!net && !s0.jumps.length) return `<li><b>${lab}:</b> no real move since ${esc(fmtDay(new Date(pts[0].t).toISOString()))}.${pre}</li>`;
+      return `<li><b>${lab}:</b> ${fmt(pts[0].v)} → ${fmt(pts[pts.length - 1].v)}.${pre} ${s0.jumps.length ? `${s0.jumps.length} fast jump${s0.jumps.length > 1 ? 's' : ''} (${s0.jumps.slice(0, 4).map((j) => `${esc(fmtDay(new Date(j.t).toISOString()))} ${esc(fmtTime(new Date(j.t).toISOString()))} ${sgn(j.dv)}`).join(', ')}${s0.jumps.length > 4 ? '…' : ''}) moved it ${sgn(s0.fast)}; slow drift moved it ${sgn(s0.drift)}.` : `All drift, no fast jumps (${sgn(net)}).`}</li>`; };
     ov.firstElementChild.innerHTML = `
       <div class="row" style="justify-content:space-between"><b class="disp" style="font-size:20px">${esc(d.away.short)} @ ${esc(d.home.short)}</b><button class="btn" data-x>Close</button></div>
       <div class="dim" style="font-size:12.5px">${esc(fmtDay(g.start_time))} ${esc(fmtTime(g.start_time))} · ${snaps.length} saved checks since ${snaps[0] ? esc(fmtDay(snaps[0].ts)) : '—'}</div>
       ${chart(tot, g.open_total !== null ? Number(g.open_total) : null, 'Total', (v) => String(v))}
       ${chart(sp, g.open_spread_home !== null ? Number(g.open_spread_home) : null, `Spread (${esc(d.home.abbr)})`, (v) => line(v))}
-      <ul style="font-size:13.5px;padding-left:18px;margin:10px 0 0">${story(sT, tot, 'Total', (v) => String(v))}${story(sS, sp, 'Spread', hs)}</ul>
-      <p class="dim" style="font-size:12px;margin:8px 0 0"><b class="gold">Gold dots</b> are fast jumps: ${th.tot}+ point${th.tot === 1 ? '' : 's'} on the total or ${th.sp}+ on the spread inside 30 minutes, the kind of move a big bet or real news makes. Slow drift is usually the book balancing ordinary action. That difference is a read on the market, not a proven edge: the Moving lines record above is the scorecard.</p>`;
+      <ul style="font-size:13.5px;padding-left:18px;margin:10px 0 0">${story(sT, tot, 'Total', (v) => String(v), g.open_total)}${story(sS, sp, 'Spread', hs, g.open_spread_home)}</ul>
+      <p class="dim" style="font-size:12px;margin:8px 0 0"><b class="gold">Gold dots</b> are fast jumps (quick flickers that reverse within an hour are ignored): ${th.tot}+ point${th.tot === 1 ? '' : 's'} on the total or ${th.sp}+ on the spread inside 30 minutes, the kind of move a big bet or real news makes. Slow drift is usually the book balancing ordinary action. That difference is a read on the market, not a proven edge: the Moving lines record above is the scorecard.</p>`;
     ov.querySelector('[data-x]').onclick = close;
   }
   await load();
