@@ -1,6 +1,7 @@
-import { games, api, esc, logo, line, sgn, odds, pct, fmtTime, fmtDay, footNote, lastSync, ago, clearCache, howTo, wireHow, SB_URL, SB_KEY } from './core.js?v=202611221410';
-import { bestBets, gradeFinal } from './bets.js?v=202611221410';
-import { trackBtn } from './mybets.js?v=202611221410';
+import { games, api, esc, logo, line, sgn, odds, pct, fmtTime, fmtDay, footNote, lastSync, ago, clearCache, howTo, wireHow, SB_URL, SB_KEY } from './core.js?v=202611221416';
+import { bestBets, gradeFinal } from './bets.js?v=202611221416';
+import { trackBtn } from './mybets.js?v=202611221416';
+import { NEWS } from './news.js?v=202611221416';
 
 const LG = { nfl: 'NFL', cfb: 'College', nba: 'NBA' };
 
@@ -38,8 +39,12 @@ export async function render(el, { toolById }) {
   <div class="sec" id="bb"><h2>Best bets</h2><div class="loading" style="padding:20px 0">Checking every tool against every game…</div></div>
   <div class="sec"><h2>Tools</h2><div class="grid g2">${tools.map(([id, d]) => `<a class="card" href="#${id}" style="color:inherit;text-decoration:none"><b class="disp" style="font-size:22px">${esc(toolById[id].name)}</b><p class="muted" style="margin:4px 0 0">${esc(d)}</p></a>`).join('')}</div>
 </div>
+  ${newsHtml(showAll)}
   ${footNote('Lines, scores, and TV: DraftKings and ESPN via ESPN’s public scoreboard, checked every 5 minutes.')}`;
   el.querySelector('[data-act=refresh]').onclick = () => { clearCache(); draw(); };
+  const wireNews = () => { const m = el.querySelector('[data-act=news]'); if (m) m.onclick = () => { showAll = !showAll; el.querySelector('#news').outerHTML = newsHtml(showAll); wireNews(); }; };
+  wireNews();
+  try { localStorage.setItem('bd:newsSeen', NEWS[0].date); } catch { /* private mode */ }
   liveCount = live.length;
   fillBets(el.querySelector('#bb')).catch((e) => { el.querySelector('#bb').innerHTML = `<h2>Best bets</h2><div class="empty">Couldn’t build best bets right now (${esc(e.message)}). Try Refresh.</div>`; });
   }
@@ -48,6 +53,17 @@ export async function render(el, { toolById }) {
   return () => clearInterval(t);
 }
 
+// What's new, newest first; entries since your last visit get a New tag
+let showAll = false;
+const seenAt = (() => { try { return localStorage.getItem('bd:newsSeen') || ''; } catch { return ''; } })();
+function newsHtml(all) {
+  const list = all ? NEWS : NEWS.slice(0, 6);
+  const day = (d) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `<div class="sec" id="news"><h2>What’s new</h2><div class="card" style="padding:4px 14px">
+    ${list.map((n) => `<div style="padding:10px 0;border-top:1px solid var(--line)"><div class="row" style="gap:8px;flex-wrap:wrap"><span class="dim num" style="font-size:12px;min-width:46px">${day(n.date)}</span>${n.date > seenAt && seenAt ? '<span class="chip gold">New</span>' : ''}<b>${n.tool ? `<a href="#${n.tool}" style="color:inherit">${esc(n.title)}</a>` : esc(n.title)}</b></div>
+      <div class="muted" style="font-size:13.5px;margin-top:3px">${esc(n.text)}</div></div>`).join('')}
+    ${NEWS.length > 6 ? `<div style="padding:8px 0;border-top:1px solid var(--line)"><button class="btn" data-act="news">${all ? 'Show fewer' : `Show all ${NEWS.length}`}</button></div>` : ''}</div></div>`;
+}
 const MKN = { sp: 'Spread', tot: 'Total', ml: 'Moneyline', teaser: 'Teaser leg' };
 function betLabel(b, g) {
   const team = (s) => g.data?.[s]?.short ?? (s === 'home' ? g.home : g.away);

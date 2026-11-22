@@ -1,0 +1,19 @@
+// What's new: the changes worth knowing about, newest first. Add an entry for each real feature, not for fixes.
+// tool = the page it links to (the sidebar id), or null.
+export const NEWS = [
+  { date: '2026-11-22', tool: 'linelife', title: 'Line timelines', text: 'Tap any game (or Timeline on a card) to see every line change since the open, with fast moves that held marked in gold and a plain summary of how it got there.' },
+  { date: '2026-11-22', tool: 'redzone', title: 'Round robin builder', text: 'Pick 3–6 touchdown scorers, enter your book’s prices and the dollars per bet, and see what each outcome pays, the chance of each, and the expected return of every way to bet them (by 2s, 3s, full parlay, everything).' },
+  { date: '2026-11-22', tool: 'paint', title: 'Dunkel Index added', text: 'In the Paint shows Dunkel’s projected total next to ours, says when the two models agree or split, and grades Dunkel’s totals. Dunkel’s NFL, college and NBA picks are also in Cap’n Cash with their own record.' },
+  { date: '2026-11-20', tool: 'capn', title: 'Follow handicappers', text: 'Star the handicappers you trust; they’re highlighted and listed first on every card. Anyone hitting 60%+ is in gold. Each one shows a long record and the last 30 days. No more unit records.' },
+  { date: '2026-11-20', tool: 'linelife', title: 'Win chance on every moving line', text: 'Each flag shows an estimated win chance; gold means 55% or better, backed by NFL history, a cut that holds, or the flag’s own record. Strongest signal now sorts by win chance. Sort buttons added too.' },
+  { date: '2026-11-20', tool: 'whistle', title: 'Live lines graded honestly', text: 'Quarter-break snapshots no longer get missed, and a live number the book never moved off the pregame line is treated as frozen, not as a live bet.' },
+  { date: '2026-11-19', tool: 'redzone', title: 'Player breakdowns', text: 'Tap any player for role, matchup, spot and four 0–100 bars. Injured players drop off and their touches go to teammates; returning players are tagged.' },
+  { date: '2026-11-19', tool: 'capn', title: 'Many more handicappers', text: 'CBS Sports experts, Pickswise, plus the OddsShark, Dimers and ESPN computer models, all graded here.' },
+  { date: '2026-11-18', tool: 'mybets', title: 'My Bets tracker', text: 'Tap + Track on any pick across the site. Bets grade themselves after the final, with your record split by tool. Best bets show a suggested stake.' },
+  { date: '2026-11-18', tool: 'whistle', title: 'At the Whistle and Slant', text: 'At the Whistle projects every NFL player prop at each quarter break against the live line. Slant prices pregame props using form, matchup, injuries, QB changes, weather and game script.' },
+  { date: '2026-11-18', tool: 'scratch', title: 'Cooking from Scratch', text: 'Louisiana scratch-offs ranked by value and by the chance of a $500+ prize, with nearly sold-out games that still hold big prizes called out.' },
+  { date: '2026-11-17', tool: 'linelife', title: 'Moving-line flags', text: 'Lines that move off the opener are flagged with the number to get and the number where it’s no longer worth chasing, and every flag is graded.' },
+  { date: '2026-11-16', tool: 'desk', title: 'Best bets on Today', text: 'One list combining every tool, weighted by how each one has done on games it hadn’t seen, logged and graded.' },
+  { date: '2026-11-16', tool: 'paint', title: 'In the Paint and Redzone', text: 'NBA totals projected before tip and at every quarter break; NFL anytime-touchdown chances, calibrated to what has actually happened.' },
+  { date: '2026-11-16', tool: 'matrix', title: 'Matrix and research systems', text: '464 situational systems matched to this week and graded since they were found, plus research-backed systems tested before and after publication.' },
+];
