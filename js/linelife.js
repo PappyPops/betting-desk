@@ -1,7 +1,7 @@
-import { games, api, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611221406';
-import { flagNow, loadFlags, gradeFlags, TRIG, historyNote, SNAPS_FROM } from './moves.js?v=202611221406';
-import { trackBtn } from './mybets.js?v=202611221406';
-import { nflHist } from './hist.js?v=202611221406';
+import { games, api, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611221408';
+import { flagNow, loadFlags, gradeFlags, TRIG, historyNote, SNAPS_FROM } from './moves.js?v=202611221408';
+import { trackBtn } from './mybets.js?v=202611221408';
+import { nflHist } from './hist.js?v=202611221408';
 
 // Totals rules written up front (not mined from the data), then checked on two separate halves of history.
 export const CUTS = [
@@ -209,7 +209,9 @@ export async function render(el) {
       const dv = pts[i].v - pts[i - 1].v; if (!dv) continue;
       let j = i - 1; while (j > 0 && pts[i].t - pts[j - 1].t <= 30 * 60e3) j--;
       const win = pts[i].v - pts[j].v;
-      if (Math.abs(win) >= th && Math.sign(win) === Math.sign(dv)) { fast += dv; pts[i].fast = true; jumps.push({ t: pts[i].t, dv }); } else drift += dv;
+      // it must hold: back to the old number (or past it) within 6 hours means the book was testing, not reacting
+      const before = pts[j].v, held = !pts.slice(i + 1).some((p) => p.t - pts[i].t <= 6 * 3600e3 && (win > 0 ? p.v <= before : p.v >= before));
+      if (Math.abs(win) >= th && Math.sign(win) === Math.sign(dv) && held) { fast += dv; pts[i].fast = true; jumps.push({ t: pts[i].t, dv }); } else drift += dv;
     }
     return { fast, drift, jumps };
   }
@@ -239,7 +241,7 @@ export async function render(el) {
       ${chart(tot, g.open_total !== null ? Number(g.open_total) : null, 'Total', (v) => String(v))}
       ${chart(sp, g.open_spread_home !== null ? Number(g.open_spread_home) : null, `Spread (${esc(d.home.abbr)})`, (v) => line(v))}
       <ul style="font-size:13.5px;padding-left:18px;margin:10px 0 0">${story(sT, tot, 'Total', (v) => String(v), g.open_total)}${story(sS, sp, 'Spread', hs, g.open_spread_home)}</ul>
-      <p class="dim" style="font-size:12px;margin:8px 0 0"><b class="gold">Gold dots</b> are fast jumps (quick flickers that reverse within an hour are ignored): ${th.tot}+ point${th.tot === 1 ? '' : 's'} on the total or ${th.sp}+ on the spread inside 30 minutes, the kind of move a big bet or real news makes. Slow drift is usually the book balancing ordinary action. That difference is a read on the market, not a proven edge: the Moving lines record above is the scorecard.</p>`;
+      <p class="dim" style="font-size:12px;margin:8px 0 0"><b class="gold">Gold dots</b> are fast jumps that held for at least 6 hours (flickers and moves the book took back don’t count): ${th.tot}+ point${th.tot === 1 ? '' : 's'} on the total or ${th.sp}+ on the spread inside 30 minutes, the kind of move a big bet or real news makes. Slow drift is usually the book balancing ordinary action. That difference is a read on the market, not a proven edge: the Moving lines record above is the scorecard.</p>`;
     ov.querySelector('[data-x]').onclick = close;
   }
   await load();
