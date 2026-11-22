@@ -1,7 +1,7 @@
-import { games, api, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611221408';
-import { flagNow, loadFlags, gradeFlags, TRIG, historyNote, SNAPS_FROM } from './moves.js?v=202611221408';
-import { trackBtn } from './mybets.js?v=202611221408';
-import { nflHist } from './hist.js?v=202611221408';
+import { games, api, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611221410';
+import { flagNow, loadFlags, gradeFlags, TRIG, historyNote, SNAPS_FROM } from './moves.js?v=202611221410';
+import { trackBtn } from './mybets.js?v=202611221410';
+import { nflHist } from './hist.js?v=202611221410';
 
 // Totals rules written up front (not mined from the data), then checked on two separate halves of history.
 export const CUTS = [
@@ -234,7 +234,7 @@ export async function render(el) {
     const story = (s0, pts, lab, fmt, open) => { if (pts.length < 2) return ''; const net = pts[pts.length - 1].v - pts[0].v;
       const pre = open !== null && open !== undefined && Number(open) !== pts[0].v ? ` It had already moved ${fmt(Number(open))} → ${fmt(pts[0].v)} before every change was being saved.` : '';
       if (!net && !s0.jumps.length) return `<li><b>${lab}:</b> no real move since ${esc(fmtDay(new Date(pts[0].t).toISOString()))}.${pre}</li>`;
-      return `<li><b>${lab}:</b> ${fmt(pts[0].v)} → ${fmt(pts[pts.length - 1].v)}.${pre} ${s0.jumps.length ? `${s0.jumps.length} fast jump${s0.jumps.length > 1 ? 's' : ''} (${s0.jumps.slice(0, 4).map((j) => `${esc(fmtDay(new Date(j.t).toISOString()))} ${esc(fmtTime(new Date(j.t).toISOString()))} ${sgn(j.dv)}`).join(', ')}${s0.jumps.length > 4 ? '…' : ''}) moved it ${sgn(s0.fast)}; slow drift moved it ${sgn(s0.drift)}.` : `All drift, no fast jumps (${sgn(net)}).`}</li>`; };
+      return `<li><b>${lab}:</b> ${fmt(pts[0].v)} → ${fmt(pts[pts.length - 1].v)}.${pre} ${s0.jumps.length >= 2 && !s0.fast ? `The book went back and forth: ${s0.jumps.length} quick moves that cancelled out${s0.drift ? `, plus ${sgn(s0.drift)} of slow drift` : ''}.` : s0.jumps.length ? `${s0.jumps.length} fast jump${s0.jumps.length > 1 ? 's' : ''} (${s0.jumps.slice(0, 4).map((j) => `${esc(fmtDay(new Date(j.t).toISOString()))} ${esc(fmtTime(new Date(j.t).toISOString()))} ${sgn(j.dv)}`).join(', ')}${s0.jumps.length > 4 ? '…' : ''}) moved it ${sgn(s0.fast)}; slow drift moved it ${sgn(s0.drift)}.` : `All drift, no fast jumps (${sgn(net)}).`}</li>`; };
     ov.firstElementChild.innerHTML = `
       <div class="row" style="justify-content:space-between"><b class="disp" style="font-size:20px">${esc(d.away.short)} @ ${esc(d.home.short)}</b><button class="btn" data-x>Close</button></div>
       <div class="dim" style="font-size:12.5px">${esc(fmtDay(g.start_time))} ${esc(fmtTime(g.start_time))} · ${snaps.length} saved checks since ${snaps[0] ? esc(fmtDay(snaps[0].ts)) : '—'}</div>
