@@ -2,23 +2,24 @@
 // model's number is far from DraftKings' (and, best of all, the Dunkel Index agrees) make the default list.
 // Ratings are opponent-adjusted (beating a weak team by 30 says less than beating a good one by 10), from the
 // same engine as the simulator, refit each day with only games already played, and graded against the close.
-import { games, api, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn } from './core.js?v=202611221429';
-import { fit, predict } from './sim.js?v=202611221429';
-import { trackBtn } from './mybets.js?v=202611221429';
+import { games, api, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn } from './core.js?v=202611221433';
+import { fit, predict } from './sim.js?v=202611221433';
+import { trackBtn } from './mybets.js?v=202611221433';
 
 const SEASON_START = '2026-11-01';
 const HALF = 8, LAM = 3;            // ratings: 8-week half-life, light pull toward average
 const MIN_GP = 5;                   // both teams need 5 games in the data before a signal counts
 const EDGE = { tot: 6, sp: 4 };     // points off DraftKings before a game is a signal
+const CAP = { tot: 12, sp: 9 };     // further off than this, the model is usually the one missing something (injury, lineup); not a signal
 const BE = 110 / 210;
 const day = (iso) => Date.parse(iso) / 864e5;
 const etKey = (iso) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 
 // team ids, not abbreviations: with 360 schools some abbreviations repeat
-function asSim(g) { return { day: day(g.start_time), home: String(g.data?.home?.id ?? g.home), away: String(g.data?.away?.id ?? g.away), hs: g.home_score, as: g.away_score, neutral: !!g.data?.neutral, done: g.state === 'post' && g.home_score !== null }; }
+export function asSim(g) { return { day: day(g.start_time), home: String(g.data?.home?.id ?? g.home), away: String(g.data?.away?.id ?? g.away), hs: g.home_score, as: g.away_score, neutral: !!g.data?.neutral, done: g.state === 'post' && g.home_score !== null }; }
 
 // walk forward one day at a time: predict each day's games from earlier finals, grade the leans at the close
-function backtest(finals) {
+export function backtest(finals, half = HALF, lam = LAM) {
   const byDay = new Map(); for (const g of finals) { const k = etKey(g.start_time); if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push(g); }
   const days = [...byDay.keys()].sort().filter((k) => k >= '2026-11-12'); // a week and a half of games first
   const out = [];
@@ -26,7 +27,7 @@ function backtest(finals) {
     const these = byDay.get(k), t0 = Math.min(...these.map((g) => day(g.start_time)));
     const train = finals.filter((g) => day(g.start_time) < t0 - 0.1).map(asSim);
     const gp = new Map(); for (const g of train) { gp.set(g.home, (gp.get(g.home) ?? 0) + 1); gp.set(g.away, (gp.get(g.away) ?? 0) + 1); }
-    const m = fit(train, t0, HALF, LAM);
+    const m = fit(train, t0, half, lam);
     for (const g of these) {
       if (!(g.close_total > 0) || g.close_spread_home === null) continue;
       const sg = asSim(g); if ((gp.get(sg.home) ?? 0) < MIN_GP || (gp.get(sg.away) ?? 0) < MIN_GP) continue;
@@ -36,7 +37,7 @@ function backtest(finals) {
   }
   return out;
 }
-function rec(rows, key, th, resFn) { let w = 0, l = 0, p = 0; for (const r of rows) { const e = r[key]; if (Math.abs(e) < th) continue; const x = resFn(r.g) * Math.sign(e); if (x > 0) w++; else if (x < 0) l++; else p++; } return { w, l, p }; }
+function rec(rows, key, th, resFn, cap = Infinity) { let w = 0, l = 0, p = 0; for (const r of rows) { const e = r[key]; if (Math.abs(e) < th || Math.abs(e) > cap) continue; const x = resFn(r.g) * Math.sign(e); if (x > 0) w++; else if (x < 0) l++; else p++; } return { w, l, p }; }
 const totRes = (g) => g.home_score + g.away_score - Number(g.close_total);
 const spRes = (g) => g.home_score - g.away_score + Number(g.close_spread_home);
 const rt = (r) => r.w + r.l ? `${r.w}–${r.l}${r.p ? '–' + r.p : ''}` : '—';
@@ -62,7 +63,7 @@ export async function render(el) {
     if (g.close_total > 0 && Number(d.first_total) !== Number(g.close_total)) tally(dkT, totRes(g) * Math.sign(Number(d.first_total) - Number(g.close_total)));
     if (d.pick_side && d.pick_line !== null) { const m = (d.pick_side === 'home' ? g.home_score - g.away_score : g.away_score - g.home_score) + Number(d.pick_line); tally(dkS, m); }
     const b = bt.find((r) => r.g.id === g.id);
-    if (b && Math.abs(b.eT) >= EDGE.tot && g.close_total > 0 && Math.sign(Number(d.first_total) - Number(g.close_total)) === Math.sign(b.eT)) tally(both, totRes(g) * Math.sign(b.eT));
+    if (b && Math.abs(b.eT) >= EDGE.tot && Math.abs(b.eT) <= CAP.tot && g.close_total > 0 && Math.sign(Number(d.first_total) - Number(g.close_total)) === Math.sign(b.eT)) tally(both, totRes(g) * Math.sign(b.eT));
   }
 
   // today's ratings for upcoming games
@@ -77,14 +78,15 @@ export async function render(el) {
     const eT = ln !== null ? p.ph + p.pa - ln : null, eS = sp !== null ? (p.ph - p.pa) + sp : null;
     const dkTot = d ? Number(d.dunkel_total) : null;
     const dkSide = d?.pick_side ?? null;
-    const tSig = !early && eT !== null && Math.abs(eT) >= EDGE.tot ? (eT > 0 ? 'over' : 'under') : null;
-    const sSig = !early && eS !== null && Math.abs(eS) >= EDGE.sp ? (eS > 0 ? 'home' : 'away') : null;
+    const tSig = !early && eT !== null && Math.abs(eT) >= EDGE.tot && Math.abs(eT) <= CAP.tot ? (eT > 0 ? 'over' : 'under') : null;
+    const sSig = !early && eS !== null && Math.abs(eS) >= EDGE.sp && Math.abs(eS) <= CAP.sp ? (eS > 0 ? 'home' : 'away') : null;
+    const wild = !early && ((eT !== null && Math.abs(eT) > CAP.tot) || (eS !== null && Math.abs(eS) > CAP.sp));
     const tAgree = tSig && dkTot !== null && ln !== null && Math.sign(dkTot - ln) === Math.sign(eT);
     const sAgree = sSig && dkSide === sSig;
-    return { g, p, d, ln, sp, eT, eS, early, tSig, sSig, tAgree, sAgree, score: (tSig ? Math.abs(eT) / EDGE.tot + (tAgree ? 1 : 0) : 0) + (sSig ? Math.abs(eS) / EDGE.sp + (sAgree ? 1 : 0) : 0) };
+    return { g, p, d, ln, sp, eT, eS, early, wild, tSig, sSig, tAgree, sAgree, score: (tSig ? Math.abs(eT) / EDGE.tot + (tAgree ? 1 : 0) : 0) + (sSig ? Math.abs(eS) / EDGE.sp + (sAgree ? 1 : 0) : 0) };
   });
 
-  const T = (th) => rec(bt, 'eT', th, totRes), S = (th) => rec(bt, 'eS', th, spRes);
+  const T = (th) => rec(bt, 'eT', th, totRes, CAP.tot), S = (th) => rec(bt, 'eS', th, spRes, CAP.sp);
   function draw() {
     const inWhen = (x) => st.when === 'all' || etKey(x.g.start_time) === (st.when === 'today' ? todayKey : tmrKey);
     const match = (x) => !st.q || `${x.g.data.home.name} ${x.g.data.away.name}`.toLowerCase().includes(st.q.toLowerCase());
@@ -99,7 +101,7 @@ export async function render(el) {
       const tLab = x.tSig ? `${x.tSig === 'over' ? 'Over' : 'Under'} ${x.ln}` : null, sTeam = x.sSig ? team(x.sSig) : null, sLine = x.sSig ? (x.sSig === 'home' ? x.sp : -x.sp) : null;
       return `<tr>
         <td style="white-space:nowrap" class="dim">${esc(fmtTime(g.start_time))}${st.when === 'all' ? `<br>${esc(fmtDay(g.start_time))}` : ''}</td>
-        <td><div class="team">${logo(d.away)}<span>${d.away.rank ? `<span class="dim">${d.away.rank}</span> ` : ''}${esc(d.away.short)}</span></div><div class="team" style="margin-top:2px">${logo(d.home)}<span>${d.neutral ? 'vs' : '@'} ${d.home.rank ? `<span class="dim">${d.home.rank}</span> ` : ''}${esc(d.home.short)}</span></div>${x.early ? '<div class="dim" style="font-size:11px">early: under 5 games of data</div>' : ''}</td>
+        <td><div class="team">${logo(d.away)}<span>${d.away.rank ? `<span class="dim">${d.away.rank}</span> ` : ''}${esc(d.away.short)}</span></div><div class="team" style="margin-top:2px">${logo(d.home)}<span>${d.neutral ? 'vs' : '@'} ${d.home.rank ? `<span class="dim">${d.home.rank}</span> ` : ''}${esc(d.home.short)}</span></div>${x.early ? '<div class="dim" style="font-size:11px">early: under 5 games of data</div>' : x.wild ? '<div class="dim" style="font-size:11px">model far off the line: likely missing news, skipped</div>' : ''}</td>
         <td class="r num">${x.ln ?? '—'}<div class="dim">${x.sp !== null ? `${esc(d.home.abbr)} ${line(x.sp)}` : ''}</div></td>
         <td class="r num">${(x.p.ph + x.p.pa).toFixed(1)}<div class="dim">${esc(d.home.abbr)} ${line(-Math.round((x.p.ph - x.p.pa) * 2) / 2)}</div></td>
         <td class="r num">${x.d ? Number(x.d.dunkel_total) : '<span class="dim">—</span>'}<div class="dim">${x.d?.pick_side ? `${esc(team(x.d.pick_side).abbr)} ${line(Number(x.d.pick_line))}` : ''}</div></td>
@@ -112,7 +114,7 @@ export async function render(el) {
       <button class="btn" data-act="refresh">↻ Refresh</button></div>
     ${howTo('How it works', `<ol>
       <li><b>Ratings:</b> every team’s offense and defense from its scores, adjusted for who it played, with recent games counting more and a home edge (none at neutral sites). Refit every day from games already played.</li>
-      <li><b>A signal</b> is a game where the projected total is ${EDGE.tot}+ points off DraftKings, or the projected margin is ${EDGE.sp}+ points off the spread, and both teams have ${MIN_GP}+ games of data. Gold means Dunkel’s own number points the same way.</li>
+      <li><b>A signal</b> is a game where the projected total is ${EDGE.tot}+ points off DraftKings, or the projected margin is ${EDGE.sp}+ points off the spread, and both teams have ${MIN_GP}+ games of data. Gaps bigger than ${CAP.tot} (totals) or ${CAP.sp} (spreads) are skipped: that far off, the model is usually the one missing something, like an injury. Gold means Dunkel’s own number points the same way.</li>
       <li><b>Graded honestly:</b> each past day is re-projected with only earlier games and graded at the closing line (table below). Early in the season ratings are rough; the record tells you when to trust them.</li>
       <li>With 150 games a night, the default list shows signals only. Switch to All games or search a team to see the rest.</li></ol>`, 'court')}
     <div class="grid g4" style="margin-bottom:12px">
