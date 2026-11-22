@@ -1,7 +1,7 @@
-import { games, api, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611221343';
-import { flagNow, loadFlags, gradeFlags, TRIG, historyNote, SNAPS_FROM } from './moves.js?v=202611221343';
-import { trackBtn } from './mybets.js?v=202611221343';
-import { nflHist } from './hist.js?v=202611221343';
+import { games, api, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611221403';
+import { flagNow, loadFlags, gradeFlags, TRIG, historyNote, SNAPS_FROM } from './moves.js?v=202611221403';
+import { trackBtn } from './mybets.js?v=202611221403';
+import { nflHist } from './hist.js?v=202611221403';
 
 // Totals rules written up front (not mined from the data), then checked on two separate halves of history.
 export const CUTS = [
@@ -101,7 +101,7 @@ export async function render(el) {
     const board = moved.sort(SORTS[st.sort] || SORTS.time).map(({ g, mv }) => {
       const d = g.data, cuts = liveCuts.get(g.id) || [];
       const big = Math.abs(mv) >= (st.lg === 'nba' ? 3 : 2);
-      return `<tr style="${cuts.length ? 'box-shadow:inset 3px 0 0 var(--gold)' : ''}">
+      return `<tr data-tl="${esc(g.id)}" title="Tap for the line's timeline" style="cursor:pointer;${cuts.length ? 'box-shadow:inset 3px 0 0 var(--gold)' : ''}">
         <td><div class="team">${logo(d.away)}<span>${esc(d.away.short)}</span></div><div class="team" style="margin-top:3px">${logo(d.home)}<span>${d.neutral ? 'vs' : '@'} ${esc(d.home.short)}</span></div></td>
         <td class="muted" style="font-size:13px">${esc(fmtDay(g.start_time))}<br>${esc(fmtTime(g.start_time))}${st.sort === 'new' ? `<div class="dim" style="font-size:11.5px">line up ${opened.get(String(g.id)) ? `${esc(fmtDay(opened.get(String(g.id))))} ${esc(fmtTime(opened.get(String(g.id))))}` : 'before Nov 17'}</div>` : ''}</td>
         <td class="r num disp" style="font-size:20px">${g.open_total ?? '—'}</td>
@@ -148,7 +148,7 @@ export async function render(el) {
         <div class="disp" style="font-size:22px;margin:2px 0">${esc(pick(g, f, f.num))}</div>
         <div style="font-size:13px">Opened ${esc(pick(g, f, f.open))} · moved ${f.move} toward this side</div>
         ${(() => { const h = historyNote(st.lg, f); return h && h.tone === 'clay' ? `<div style="font-size:13px;margin-top:6px;padding-top:6px;border-top:1px solid var(--line2)" class="clay"><b>${esc(h.text)}</b></div>`
-          : `<div style="font-size:13px;margin-top:6px;padding-top:6px;border-top:1px solid var(--line2)"><b class="mint">Get it at ${esc(pick(g, f, f.num))} or better.</b> <span class="clay">Pass past ${esc(pick(g, f, f.limit))}.</span>${h ? `<div class="mint" style="font-size:12.5px;margin-top:4px">${esc(h.text)}</div>` : ''}<div style="text-align:right;margin-top:6px">${trackBtn({ gid: String(g.id), market: f.mk, side: f.side, line: f.num, label: pick(g, f, f.num), game: `${team(g, 'away')} @ ${team(g, 'home')}`, start: g.start_time, tool: 'Line Life' })}</div></div>`; })()}
+          : `<div style="font-size:13px;margin-top:6px;padding-top:6px;border-top:1px solid var(--line2)"><b class="mint">Get it at ${esc(pick(g, f, f.num))} or better.</b> <span class="clay">Pass past ${esc(pick(g, f, f.limit))}.</span>${h ? `<div class="mint" style="font-size:12.5px;margin-top:4px">${esc(h.text)}</div>` : ''}<div style="text-align:right;margin-top:6px"><button class="btn" data-tlb="${esc(g.id)}" style="padding:4px 10px;font-size:12px;margin-right:6px">Timeline</button>${trackBtn({ gid: String(g.id), market: f.mk, side: f.side, line: f.num, label: pick(g, f, f.num), game: `${team(g, 'away')} @ ${team(g, 'home')}`, start: g.start_time, tool: 'Line Life' })}</div></div>`; })()}
         <div class="dim" style="font-size:12px;margin-top:6px">Est. win chance <b class="${ch.strong ? 'gold' : ch.p < 0.5 ? 'clay' : ''}">${Math.round(ch.p * 100)}%</b> · ${ch.why.length ? esc(ch.why.join(' · ')) : 'the move alone (no proven edge, price only)'}</div></div>`; }).join('')}</div>` : '<div class="empty">No line has moved enough yet.</div>'}
       <div class="card" style="padding:4px 12px;overflow-x:auto;margin-top:12px"><table class="t"><tr><th>Does the flag work?</th><th class="r">Line kept moving past the flag</th><th class="r">Record at the flagged number</th></tr>
         ${[['all', 'All leagues'], ...['nfl', 'cfb', 'nba'].flatMap((lg) => [[`${lg}:tot`, `${LGN[lg]} totals`], [`${lg}:sp`, `${LGN[lg]} spreads`]])].map(([k, lab]) => `<tr><td>${lab}</td><td class="r num">${flagRec ? clvCell(fr(k)) : '…'}</td><td class="r num">${flagRec ? recCell(fr(k)) : '…'}</td></tr>`).join('')}</table></div>
@@ -161,7 +161,7 @@ export async function render(el) {
       <li><b>Moving lines</b> flags any total or spread that has moved far enough from the opener, with the number to get and where to stop chasing it. The table under it grades every flag.</li>
       <li><b>Season</b> shows how finals landed against the closing total and the opener. A market that’s right should split about 50/50.</li>
       <li><b>Sort</b> applies to both lists. Strongest signal ranks by estimated win chance (gold first), then by how far the line has moved, and puts moves history says not to chase last. Newest line shows when each line first appeared, so you can catch openers early.</li>
-      <li><b>Board</b> lists every upcoming total with its open, the number now, and the move. Big moves are highlighted. A gold edge means a cut that holds applies to that game.</li>
+      <li><b>Board</b> lists every upcoming total with its open, the number now, and the move. Big moves are highlighted. Tap any game (or Timeline on a card) to see every change since the open, with fast jumps marked in gold. A gold edge means a cut that holds applies to that game.</li>
       <li><b>Cuts</b> (NFL) are simple rules checked on two separate halves of history. The old version mined patterns on past seasons and went 16–22 this year; these have to survive both halves before they light up.</li></ol>`, 'll')}
     <div class="row" style="margin-bottom:14px;gap:8px;flex-wrap:wrap">${seg('lg', [['nfl', 'NFL'], ['cfb', 'College'], ['nba', 'NBA']], st.lg)}<span class="row" style="gap:6px"><span class="dim" style="font-size:13px">Sort</span>${seg('sort', [['time', 'Start time'], ['signal', 'Strongest signal'], ['move', 'Biggest move'], ['new', 'Newest line']], st.sort)}</span></div>
     <div class="grid g4">
@@ -181,7 +181,62 @@ export async function render(el) {
     onSeg(el, 'lg', (v) => { st.lg = v; store.set('ll:lg', v); opened = new Map(); load(); });
     onSeg(el, 'sort', (v) => { st.sort = v; store.set('ll:sort', v); draw(); });
     el.querySelector('[data-act=refresh]').onclick = () => { clearCache(); load(); };
+    el.querySelectorAll('[data-tlb]').forEach((b) => b.onclick = () => timeline(b.dataset.tlb));
+    el.querySelectorAll('[data-tl]').forEach((r) => r.onclick = (e) => { if (e.target.closest('button,a,input')) return; timeline(r.dataset.tl); });
     wireHow(el);
+  }
+
+  // ---- line timeline: every saved change since the open, split into fast jumps and slow drift ----
+  const FAST = { nfl: { tot: 1, sp: 1 }, cfb: { tot: 1.5, sp: 1.5 }, nba: { tot: 1.5, sp: 1 } };
+  function chart(pts, open, label, fmt) {
+    if (pts.length < 2) return `<div class="dim" style="font-size:13px">${label}: no change saved yet.</div>`;
+    const W = 560, H = 150, P = 28;
+    const t0 = pts[0].t, t1 = pts[pts.length - 1].t, vs = pts.map((p) => p.v).concat(open ?? []), lo = Math.min(...vs) - 0.5, hi = Math.max(...vs) + 0.5;
+    const x = (t) => P + (W - 2 * P) * (t1 === t0 ? 0 : (t - t0) / (t1 - t0)), y = (v) => H - P + 6 - (H - 2 * P) * ((v - lo) / (hi - lo || 1));
+    let d = `M${x(pts[0].t).toFixed(1)},${y(pts[0].v).toFixed(1)}`;
+    for (let i = 1; i < pts.length; i++) d += ` H${x(pts[i].t).toFixed(1)} V${y(pts[i].v).toFixed(1)}`; // step line: the number held until it changed
+    const dots = pts.filter((p) => p.fast).map((p) => `<circle cx="${x(p.t).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="4.5" fill="var(--gold)"><title>${esc(fmtDay(new Date(p.t).toISOString()))} ${esc(fmtTime(new Date(p.t).toISOString()))}: ${fmt(p.v)}</title></circle>`).join('');
+    const ticks = [lo + 0.5, (lo + hi) / 2, hi - 0.5].map((v) => `<text x="4" y="${y(v) + 4}" font-size="11" fill="var(--muted)">${fmt(Math.round(v * 2) / 2)}</text>`).join('');
+    return `<div class="kicker" style="color:var(--muted);margin:10px 0 4px">${label}</div><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${ticks}
+      ${open !== null && open !== undefined ? `<line x1="${P}" x2="${W - P}" y1="${y(open)}" y2="${y(open)}" stroke="var(--line2)" stroke-dasharray="4 4"/><text x="${W - P}" y="${y(open) - 4}" font-size="11" fill="var(--muted)" text-anchor="end">open ${fmt(open)}</text>` : ''}
+      <path d="${d}" fill="none" stroke="var(--text)" stroke-width="2"/>${dots}
+      <text x="${P}" y="${H - 4}" font-size="11" fill="var(--muted)">${esc(fmtDay(new Date(t0).toISOString()))}</text><text x="${W - P}" y="${H - 4}" font-size="11" fill="var(--muted)" text-anchor="end">${esc(fmtDay(new Date(t1).toISOString()))}</text></svg>`;
+  }
+  // fast = a move of the threshold or more inside 30 minutes; everything else is drift
+  function split(pts, th) {
+    let fast = 0, drift = 0; const jumps = [];
+    for (let i = 1; i < pts.length; i++) {
+      const dv = pts[i].v - pts[i - 1].v; if (!dv) continue;
+      let j = i - 1; while (j > 0 && pts[i].t - pts[j - 1].t <= 30 * 60e3) j--;
+      const win = pts[i].v - pts[j].v;
+      if (Math.abs(win) >= th && Math.sign(win) === Math.sign(dv)) { fast += dv; pts[i].fast = true; jumps.push({ t: pts[i].t, dv }); } else drift += dv;
+    }
+    return { fast, drift, jumps };
+  }
+  async function timeline(gid) {
+    const g = rows.find((r) => String(r.id) === String(gid)); if (!g) return;
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px';
+    ov.innerHTML = '<div class="card" style="max-width:640px;width:100%;margin:auto;padding:18px"><div class="loading">Loading every line change…</div></div>';
+    el.appendChild(ov);
+    const close = () => { ov.remove(); document.removeEventListener('keydown', esc_); }; const esc_ = (e) => { if (e.key === 'Escape') close(); };
+    document.addEventListener('keydown', esc_); ov.onclick = (e) => { if (e.target === ov) close(); };
+    const snaps = await api(`line_snaps?select=ts,spread_home,total&game_id=eq.${encodeURIComponent(gid)}&order=ts.asc&limit=5000`, { ttl: 60_000 }).catch(() => []);
+    const series = (k) => { const out = []; for (const s0 of snaps) { const v = s0[k]; if (v === null || v === undefined) continue; const n = Number(v), t = new Date(s0.ts).getTime(); if (!out.length || out[out.length - 1].v !== n) out.push({ t, v: n }); }
+      if (out.length && new Date(g.start_time).getTime() > Date.now()) out.push({ t: Date.now(), v: out[out.length - 1].v }); return out; };
+    const tot = series('total'), sp = series('spread_home');
+    const th = FAST[st.lg] ?? FAST.nfl, sT = split(tot, th.tot), sS = split(sp, th.sp);
+    const d = g.data, hs = (v) => `${d.home.abbr} ${line(v)}`;
+    const story = (s0, pts, lab, fmt) => { if (pts.length < 2) return ''; const net = pts[pts.length - 1].v - pts[0].v; if (!net && !s0.jumps.length) return `<li><b>${lab}:</b> hasn’t moved since it was first saved.</li>`;
+      return `<li><b>${lab}:</b> ${fmt(pts[0].v)} → ${fmt(pts[pts.length - 1].v)}. ${s0.jumps.length ? `${s0.jumps.length} fast jump${s0.jumps.length > 1 ? 's' : ''} (${s0.jumps.slice(0, 4).map((j) => `${esc(fmtDay(new Date(j.t).toISOString()))} ${esc(fmtTime(new Date(j.t).toISOString()))} ${sgn(j.dv)}`).join(', ')}${s0.jumps.length > 4 ? '…' : ''}) moved it ${sgn(s0.fast)}; slow drift moved it ${sgn(s0.drift)}.` : `All drift, no fast jumps (${sgn(net)}).`}</li>`; };
+    ov.firstElementChild.innerHTML = `
+      <div class="row" style="justify-content:space-between"><b class="disp" style="font-size:20px">${esc(d.away.short)} @ ${esc(d.home.short)}</b><button class="btn" data-x>Close</button></div>
+      <div class="dim" style="font-size:12.5px">${esc(fmtDay(g.start_time))} ${esc(fmtTime(g.start_time))} · ${snaps.length} saved checks since ${snaps[0] ? esc(fmtDay(snaps[0].ts)) : '—'}</div>
+      ${chart(tot, g.open_total !== null ? Number(g.open_total) : null, 'Total', (v) => String(v))}
+      ${chart(sp, g.open_spread_home !== null ? Number(g.open_spread_home) : null, `Spread (${esc(d.home.abbr)})`, (v) => line(v))}
+      <ul style="font-size:13.5px;padding-left:18px;margin:10px 0 0">${story(sT, tot, 'Total', (v) => String(v))}${story(sS, sp, 'Spread', hs)}</ul>
+      <p class="dim" style="font-size:12px;margin:8px 0 0"><b class="gold">Gold dots</b> are fast jumps: ${th.tot}+ point${th.tot === 1 ? '' : 's'} on the total or ${th.sp}+ on the spread inside 30 minutes, the kind of move a big bet or real news makes. Slow drift is usually the book balancing ordinary action. That difference is a read on the market, not a proven edge: the Moving lines record above is the scorecard.</p>`;
+    ov.querySelector('[data-x]').onclick = close;
   }
   await load();
 }
