@@ -1,7 +1,7 @@
-import { games, blob, api, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, copy } from './core.js?v=202611221319';
-import { nflHist } from './hist.js?v=202611221319';
-import { trackBtn } from './mybets.js?v=202611221319';
-import { roundRobin, decOf, amOf } from './rr.js?v=202611221319';
+import { games, blob, api, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, copy } from './core.js?v=202611221343';
+import { nflHist } from './hist.js?v=202611221343';
+import { trackBtn } from './mybets.js?v=202611221343';
+import { roundRobin, decOf, amOf } from './rr.js?v=202611221343';
 
 const GROUP = (pos) => pos === 'QB' ? 'QB' : pos === 'TE' ? 'TE' : pos === 'WR' ? 'WR' : 'RB';
 const K_RUSH = 60, K_REC = 50, K_OPP = 8;
@@ -237,7 +237,7 @@ export async function render(el) {
     const res = n ? roundRobin(legs.map((l) => ({ p: l.x.p, dec: l.dec })), sizesFor(mode, n), R.stake) : null;
     const compare = n >= 2 ? RRMODES(n).map(([k, lab]) => ({ k, lab, r: roundRobin(legs.map((l) => ({ p: l.x.p, dec: l.dec })), sizesFor(k, n), R.stake) })) : [];
     const unpriced = legs.filter((l) => !l.priced).length;
-    return `<div class="sec"><h2>Round robin builder</h2><p class="sub">Pick the legs (suggested: best value against DraftKings’ anytime price, one player per game), set the dollars per bet, and see what each outcome pays and what the whole ticket is expected to return. Chances are this page’s calibrated forecasts; legs are treated as independent.</p>
+    return `<div class="sec"><h2>Round robin builder</h2><p class="sub">Pick the legs (suggested: best value once you enter prices, otherwise the likeliest scorers, one player per game), set the dollars per bet, and see what each outcome pays and what the whole ticket is expected to return. Chances are this page’s calibrated forecasts; legs are treated as independent.</p>
       <div class="card">
         <div class="row" style="gap:10px;flex-wrap:wrap;margin-bottom:10px"><span class="dim" style="font-size:13px">Suggest</span>${seg('rrN', [[3, '3'], [4, '4'], [5, '5'], [6, '6']].map(([a, b]) => [String(a), b]), String(R.n))}
           <span class="dim" style="font-size:13px">$ per bet</span><input data-rr="stake" class="num" value="${R.stake}" style="width:64px;background:transparent;color:inherit;border:1px solid var(--line2);border-radius:6px;padding:3px 6px"></div>
@@ -247,7 +247,7 @@ export async function render(el) {
           <td class="r num">${pct(r.x.p)}</td><td class="r num dim">${amOf(1 / r.x.p) > 0 ? '+' : ''}${amOf(1 / r.x.p)}</td>
           <td class="r"><input data-rrodds="${esc(r.key)}" class="num" placeholder="${r.am === null ? 'enter' : ''}" value="${am !== null ? (am > 0 ? '+' + am : am) : ''}" style="width:62px;text-align:right;background:transparent;color:inherit;border:1px solid var(--line2);border-radius:6px;padding:2px 5px"></td>
           <td class="r num ${ev === null ? 'dim' : ev > 0 ? 'mint' : 'clay'}">${ev === null ? '—' : `${ev > 0 ? '+' : ''}${Math.round(ev * 100)}%`}</td></tr>`; }).join('')}</table></div>
-        ${unpriced ? `<p class="dim" style="font-size:12.5px;margin:8px 0 0">${unpriced} leg${unpriced > 1 ? 's have' : ' has'} no DraftKings price yet, so ${unpriced > 1 ? 'they use' : 'it uses'} the fair price (no edge either way). Type your book’s price to see the real return.</p>` : ''}
+        ${unpriced ? `<p class="dim" style="font-size:12.5px;margin:8px 0 0">${unpriced} leg${unpriced > 1 ? 's use' : ' uses'} the fair price, so the return shows no edge either way. ESPN’s free feed doesn’t carry anytime-touchdown prices: type your book’s price in each box to see the real return (anything priced longer than “Fair” is value).</p>` : ''}
       </div>
       ${n >= 1 ? `<div class="grid g2" style="margin-top:12px">
         <div class="card"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><b>${n} legs</b>${n >= 2 ? seg('rrMode', RRMODES(n), mode) : ''}</div>
