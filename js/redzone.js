@@ -1,7 +1,7 @@
-import { games, blob, api, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, copy } from './core.js?v=202611221538';
-import { nflHist } from './hist.js?v=202611221538';
-import { trackBtn } from './mybets.js?v=202611221538';
-import { roundRobin, decOf, amOf } from './rr.js?v=202611221538';
+import { games, blob, api, esc, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, copy } from './core.js?v=202611221855';
+import { nflHist } from './hist.js?v=202611221855';
+import { trackBtn } from './mybets.js?v=202611221855';
+import { roundRobin, decOf, amOf } from './rr.js?v=202611221855';
 
 const GROUP = (pos) => pos === 'QB' ? 'QB' : pos === 'TE' ? 'TE' : pos === 'WR' ? 'WR' : 'RB';
 const K_RUSH = 60, K_REC = 50, K_OPP = 8;
@@ -66,11 +66,15 @@ function lambda(m, players, pid, opp, implied, boost = null, back = null) {
 }
 const toP = (lam, cal = 1) => 1 - Math.exp(-lam * cal);
 
-export async function render(el) {
-  const st = { view: store.get('rz:view', 'board'), rr: { n: store.get('rz:rrN', 4), stake: store.get('rz:rrStake', 5), mode: store.get('rz:rrMode', 'all'), sel: null, odds: new Map() } };
-  el.innerHTML = '<div class="loading">Reading the box scores…</div>';
+// Everything Redzone computes, shared with Redzone FIRST. Cached for five minutes.
+let rzMemo = null, rzAt = 0;
+export function redzoneData() {
+  if (!rzMemo || Date.now() - rzAt > 300_000) { rzAt = Date.now(); rzMemo = buildRedzone().catch((e) => { rzMemo = null; throw e; }); }
+  return rzMemo;
+}
+async function buildRedzone() {
   const [pb, h] = await Promise.all([blob('nfl_players_2026', 3 * 3600_000), nflHist()]);
-  if (!pb) { el.innerHTML = '<div class="err">Player stats haven’t loaded yet. Check back in a few minutes.</div>'; return; }
+  if (!pb) return null;
   const { cols, rows: raw, players } = pb.data;
   const rows = raw.map((r) => Object.fromEntries(cols.map((c, i) => [c, r[i]])));
   const lastWeek = Math.max(...rows.map((r) => r.week));
@@ -132,9 +136,11 @@ export async function render(el) {
   const bands = [[0, 0.15], [0.15, 0.25], [0.25, 0.35], [0.35, 0.45], [0.45, 1]].map(([lo, hi]) => { let n = 0, f = 0, a = 0; for (const [g, p, y] of pairs) { const c = calP(g, p); if (c >= lo && c < hi) { n++; f += c; a += y; } } return { lo, hi, n, f: n ? f / n : null, a: n ? a / n : null }; });
   // ---- this week ----
   const m = buildModel(rows, players, histGames, lastWeek + 1);
+  // this week = the earliest week with a game not yet final; keep its started and finished games too (Redzone FIRST
+  // marks touchdowns as they happen), Redzone itself shows only games still to finish
   const pre = live.filter((g) => g.state === 'pre' && g.week);
-  const wk = Math.min(...pre.map((g) => g.week));
-  const slate = pre.filter((g) => g.week === wk);
+  const wk = Math.min(...live.filter((g) => g.state !== 'post' && g.week).map((g) => g.week));
+  const slate = live.filter((g) => g.week === wk);
   const cards = slate.map((g) => {
     const hrow = histGames.find((x) => String(x.espn) === g.id);
     if (!hrow) return null;
@@ -173,17 +179,28 @@ export async function render(el) {
     const outsList = inj.filter((x) => OUT.test(x.status || '') && ['RB', 'WR', 'TE', 'QB'].includes(x.pos));
     return { g, hrow, sides, top: list.slice(0, 4), next: list.slice(4, 7), all: list, outsList };
   }).filter(Boolean);
-  const locks = cards.map((c) => c.top[0]).filter(Boolean).sort((a, b) => b.p - a.p).slice(0, 5);
+  const locks = cards.filter((c) => c.g.state === 'pre').map((c) => c.top[0]).filter(Boolean).sort((a, b) => b.p - a.p).slice(0, 5);
   const allTop2 = weekly.reduce((a, w) => ({ hit: a.hit + w.hit, tot: a.tot + w.tot }), { hit: 0, tot: 0 });
+  return { cards, locks, allTop2, weekly, cal, bands, fit, espnOf, tdOdds, lastWeek, wk, players, groups, m, pre, slate };
+}
+
+export async function render(el) {
+  const st = { view: store.get('rz:view', 'board'), rr: { stake: store.get('rz:rrStake', 5), mode: store.get('rz:rrMode', 'all'), sel: new Set(store.get('rz:rrSel', [])), odds: new Map(Object.entries(store.get('rz:rrOdds', {})).map(([k, v]) => [k, Number(v)])) } };
+  el.innerHTML = '<div class="loading">Reading the box scores…</div>';
+  const D = await redzoneData();
+  if (!D) { el.innerHTML = '<div class="err">Player stats haven’t loaded yet. Check back in a few minutes.</div>'; return; }
+  const { locks, allTop2, weekly, cal, bands, fit, espnOf, tdOdds, lastWeek, wk, players, groups, m } = D;
+  const cards = D.cards.filter((c) => c.g.state !== 'post');
 
   const byKey = new Map(); for (const c of cards) for (const x of c.all) byKey.set(`${c.g.id}|${x.pid}`, { x, c });
   // round robin candidates: players in games not yet started, with DraftKings' anytime price when the feed has it
-  const rrPool = cards.filter((c) => c.g.state === 'pre').flatMap((c) => c.all.slice(0, 6).map((x) => {
+  // round robin pool: every player 50%+ to score in a game that hasn't started. ESPN's free feed has no anytime
+  // prices, so each one starts at an estimated typical book price (fair chance plus the usual ~12% margin), marked est.
+  const estAm = (p) => amOf(1 / Math.min(0.95, p * 1.12));
+  const rrPool = cards.filter((c) => c.g.state === 'pre').flatMap((c) => c.all.filter((x) => x.p >= 0.5).map((x) => {
     const am = tdOdds.get(`${c.g.id}|${espnOf.get(x.pid)}`) ?? null;
-    return { x, c, key: `${c.g.id}|${x.pid}`, am, ev: am !== null ? x.p * decOf(am) - 1 : null };
-  })).sort((a, b) => ((b.ev ?? -9) - (a.ev ?? -9)) || (b.x.p - a.x.p));
-  // suggested legs: best value first (best chance when there's no price), one player per game so the legs don't move together
-  const suggest = (n) => { const seen = new Set(), out = []; for (const r of rrPool) { if (seen.has(r.c.g.id)) continue; seen.add(r.c.g.id); out.push(r.key); if (out.length >= n) break; } return new Set(out); };
+    return { x, c, key: `${c.g.id}|${x.pid}`, am, est: estAm(x.p) };
+  })).sort((a, b) => b.x.p - a.x.p);
   const ord = (n) => n + (n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th');
   const calNote = (g) => { const c = cal[g]; if (!c.n) return ''; const d = c.act / c.n - c.pred / c.n; return Math.abs(d) < 0.015 ? '' : d < 0 ? `${g} forecasts have run high this season, so the chance is marked down.` : `${g} forecasts have run low this season, so the chance is marked up.`; };
   const conf = (x) => x.L.gp >= 6 && !x.boostNote && !x.status && !x.L.returning ? 'High' : x.L.gp < 3 || x.status ? 'Low' : 'Medium';
@@ -229,25 +246,32 @@ export async function render(el) {
   const sizesFor = (mode, n) => mode === 'all' ? Array.from({ length: n }, (_, i) => i + 1) : mode === 'par' ? Array.from({ length: n - 1 }, (_, i) => i + 2) : [Number(mode.slice(1))];
   function rrHtml() {
     const R = st.rr; if (!rrPool.length) return '';
-    if (!R.sel) R.sel = suggest(R.n);
-    const shown = [...new Set([...rrPool.filter((r) => R.sel.has(r.key)), ...rrPool.slice(0, 14)])];
-    const legs = rrPool.filter((r) => R.sel.has(r.key)).map((r) => { const am = R.odds.get(r.key) ?? r.am; return { ...r, useAm: am, dec: am !== null ? decOf(am) : 1 / r.x.p, priced: am !== null }; });
+    for (const k of [...R.sel]) if (!rrPool.some((r) => r.key === k)) R.sel.delete(k); // drop players whose game started
+    const priceOf = (r) => R.odds.get(r.key) ?? r.am ?? r.est;
+    const legs = rrPool.filter((r) => R.sel.has(r.key)).map((r) => ({ ...r, dec: decOf(priceOf(r)), priced: R.odds.has(r.key) || r.am !== null }));
     const n = legs.length;
     let mode = R.mode; if (n < 2) mode = 'all'; else if (/^k/.test(mode) && Number(mode.slice(1)) > n) mode = `k${n}`;
     const res = n ? roundRobin(legs.map((l) => ({ p: l.x.p, dec: l.dec })), sizesFor(mode, n), R.stake) : null;
     const compare = n >= 2 ? RRMODES(n).map(([k, lab]) => ({ k, lab, r: roundRobin(legs.map((l) => ({ p: l.x.p, dec: l.dec })), sizesFor(k, n), R.stake) })) : [];
     const unpriced = legs.filter((l) => !l.priced).length;
-    return `<div class="sec"><h2>Round robin builder</h2><p class="sub">Pick the legs (suggested: best value once you enter prices, otherwise the likeliest scorers, one player per game), set the dollars per bet, and see what each outcome pays and what the whole ticket is expected to return. Chances are this page’s calibrated forecasts; legs are treated as independent.</p>
+    const opts = rrPool.filter((r) => !R.sel.has(r.key));
+    return `<div class="sec"><h2>Round robin builder</h2><p class="sub">Pick the players you like from everyone 50%+ to score this week, set the dollars per bet, and see what each outcome pays. Prices start as estimates (est.); type your book’s price for the exact return.</p>
       <div class="card">
-        <div class="row" style="gap:10px;flex-wrap:wrap;margin-bottom:10px"><span class="dim" style="font-size:13px">Suggest</span>${seg('rrN', [[3, '3'], [4, '4'], [5, '5'], [6, '6']].map(([a, b]) => [String(a), b]), String(R.n))}
-          <span class="dim" style="font-size:13px">$ per bet</span><input data-rr="stake" class="num" value="${R.stake}" style="width:64px;background:transparent;color:inherit;border:1px solid var(--line2);border-radius:6px;padding:3px 6px"></div>
-        <div style="overflow-x:auto"><table class="t"><tr><th></th><th>Player</th><th class="r">Chance</th><th class="r">Fair</th><th class="r">Book price</th><th class="r">Value</th></tr>
-        ${shown.map((r) => { const on = R.sel.has(r.key), am = R.odds.get(r.key) ?? r.am, ev = am !== null ? r.x.p * decOf(am) - 1 : null; return `<tr style="${on ? 'background:#f0b42914' : ''}"><td><input type="checkbox" data-rrsel="${esc(r.key)}" ${on ? 'checked' : ''}></td>
+        <div class="row" style="gap:10px;flex-wrap:wrap;margin-bottom:10px">
+          <select data-rr="add" style="background:var(--surface2);color:inherit;border:1px solid var(--line2);border-radius:6px;padding:5px 8px;max-width:100%" ${R.sel.size >= 8 ? 'disabled' : ''}>
+            <option value="">${R.sel.size >= 8 ? '8 players max' : `Add a player (${opts.length} at 50%+)…`}</option>
+            ${opts.map((r) => `<option value="${esc(r.key)}">${esc(r.x.name)} · ${esc(r.x.pos)} ${esc(r.x.espnTeam.abbr)} · ${pct(r.x.p)} · ${r.am !== null ? (r.am > 0 ? '+' : '') + r.am : `est. ${r.est > 0 ? '+' : ''}${r.est}`}</option>`).join('')}</select>
+          <span class="dim" style="font-size:13px">$ per bet</span><input data-rr="stake" class="num" value="${R.stake}" style="width:64px;background:transparent;color:inherit;border:1px solid var(--line2);border-radius:6px;padding:3px 6px">
+          ${R.sel.size ? '<button class="btn" data-rr="clear" style="padding:3px 10px;font-size:12px">Clear</button>' : ''}</div>
+        ${legs.length ? `<div style="overflow-x:auto"><table class="t"><tr><th>Player</th><th class="r">Chance</th><th class="r">Fair</th><th class="r">Price</th><th class="r">Value</th><th></th></tr>
+        ${legs.map((r) => { const am = priceOf(r), ev = r.x.p * decOf(am) - 1; return `<tr>
           <td><b>${esc(r.x.name)}</b> <span class="dim" style="font-size:12px">${esc(r.x.pos)} · ${esc(r.c.g.data.away.abbr)} @ ${esc(r.c.g.data.home.abbr)}</span></td>
           <td class="r num">${pct(r.x.p)}</td><td class="r num dim">${amOf(1 / r.x.p) > 0 ? '+' : ''}${amOf(1 / r.x.p)}</td>
-          <td class="r"><input data-rrodds="${esc(r.key)}" class="num" placeholder="${r.am === null ? 'enter' : ''}" value="${am !== null ? (am > 0 ? '+' + am : am) : ''}" style="width:62px;text-align:right;background:transparent;color:inherit;border:1px solid var(--line2);border-radius:6px;padding:2px 5px"></td>
-          <td class="r num ${ev === null ? 'dim' : ev > 0 ? 'mint' : 'clay'}">${ev === null ? '—' : `${ev > 0 ? '+' : ''}${Math.round(ev * 100)}%`}</td></tr>`; }).join('')}</table></div>
-        ${unpriced ? `<p class="dim" style="font-size:12.5px;margin:8px 0 0">${unpriced} leg${unpriced > 1 ? 's use' : ' uses'} the fair price, so the return shows no edge either way. ESPN’s free feed doesn’t carry anytime-touchdown prices: type your book’s price in each box to see the real return (anything priced longer than “Fair” is value).</p>` : ''}
+          <td class="r" style="white-space:nowrap">${r.priced ? '' : '<span class="dim" style="font-size:11px">est.</span> '}<input data-rrodds="${esc(r.key)}" class="num" value="${am > 0 ? '+' + am : am}" style="width:62px;text-align:right;background:transparent;color:inherit;border:1px solid var(--line2);border-radius:6px;padding:2px 5px"></td>
+          <td class="r num ${r.priced ? (ev > 0 ? 'mint' : 'clay') : 'dim'}">${ev > 0 ? '+' : ''}${Math.round(ev * 100)}%</td>
+          <td class="r"><button class="btn" data-rrdel="${esc(r.key)}" style="padding:2px 8px;font-size:12px">✕</button></td></tr>`; }).join('')}</table></div>
+        ${legs.length >= 2 && new Set(legs.map((l) => l.c.g.id)).size < legs.length ? '<p class="clay" style="font-size:12.5px;margin:8px 0 0">⚠ Two players from the same game tend to score (or not) together, so the real chance of both is a bit different from what’s shown.</p>' : ''}
+        ${unpriced ? `<p class="dim" style="font-size:12.5px;margin:8px 0 0">${unpriced} price${unpriced > 1 ? 's are' : ' is an'} estimate${unpriced > 1 ? 's' : ''} (a typical book price for that chance), so the results show the usual book edge, not a real one. Type your book’s price to see the true return; anything longer than Fair is value.</p>` : ''}` : '<p class="dim" style="font-size:13px;margin:4px 0 0">Add players from the list to build the ticket. Up to 8.</p>'}
       </div>
       ${n >= 1 ? `<div class="grid g2" style="margin-top:12px">
         <div class="card"><div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><b>${n} legs</b>${n >= 2 ? seg('rrMode', RRMODES(n), mode) : ''}</div>
@@ -264,10 +288,12 @@ export async function render(el) {
   }
   function wireRR() {
     const R = st.rr;
-    onSeg(el, 'rrN', (v) => { R.n = Number(v); store.set('rz:rrN', R.n); R.sel = suggest(R.n); draw(); });
+    const saveSel = () => { store.set('rz:rrSel', [...R.sel]); store.set('rz:rrOdds', Object.fromEntries(R.odds)); };
     onSeg(el, 'rrMode', (v) => { R.mode = v; store.set('rz:rrMode', v); draw(); });
-    el.querySelectorAll('[data-rrsel]').forEach((b) => b.onchange = () => { const k = b.dataset.rrsel; if (b.checked) { if (R.sel.size < 8) R.sel.add(k); } else R.sel.delete(k); draw(); });
-    el.querySelectorAll('[data-rrodds]').forEach((b) => b.onchange = () => { const v = Number(String(b.value).replace(/[^0-9+-]/g, '')); if (Number.isFinite(v) && Math.abs(v) >= 100) R.odds.set(b.dataset.rrodds, v); else R.odds.delete(b.dataset.rrodds); draw(); });
+    const add = el.querySelector('[data-rr=add]'); if (add) add.onchange = () => { if (add.value && R.sel.size < 8) { R.sel.add(add.value); saveSel(); } draw(); };
+    el.querySelectorAll('[data-rrdel]').forEach((b) => b.onclick = () => { R.sel.delete(b.dataset.rrdel); saveSel(); draw(); });
+    el.querySelector('[data-rr=clear]')?.addEventListener('click', () => { R.sel.clear(); saveSel(); draw(); });
+    el.querySelectorAll('[data-rrodds]').forEach((b) => b.onchange = () => { const v = Number(String(b.value).replace(/[^0-9+-]/g, '')); if (Number.isFinite(v) && Math.abs(v) >= 100) R.odds.set(b.dataset.rrodds, v); else R.odds.delete(b.dataset.rrodds); saveSel(); draw(); });
     const sk = el.querySelector('[data-rr=stake]'); if (sk) sk.onchange = () => { const v = Number(sk.value); if (v > 0) { R.stake = v; store.set('rz:rrStake', v); } draw(); };
   }
   function draw() {
@@ -287,7 +313,6 @@ export async function render(el) {
     <p class="stamp">Top two per team each week, weeks 4–${lastWeek}: ${allTop2.hit} of ${allTop2.tot} scored (${pct(allTop2.tot ? allTop2.hit / allTop2.tot : null)}). Stats through week ${lastWeek} (nflverse).</p>
     <div class="row" style="margin:14px 0">${seg('view', [['board', 'By game'], ['week', 'Week by week']], st.view)}</div>
     ${st.view === 'board' ? `
-      ${locks.length ? `<div class="sec" style="margin-top:0"><h2>Best bets to score</h2><div class="grid g2">${locks.map((x) => `<div class="card hl">${pCard(x)}<div style="margin-top:6px"><button class="btn" data-copy="${esc(`${x.name} anytime TD`)}">Copy</button></div></div>`).join('')}</div></div>` : ''}
       ${rrHtml()}
       <div class="sec"><h2>Every game</h2><div class="grid g2">${cards.map((c) => `<div class="card">
         <div class="row" style="justify-content:space-between;font-size:13px"><span>${esc(c.g.data.away.short)} @ ${esc(c.g.data.home.short)}</span><span class="dim">${esc(fmtDay(c.g.start_time))} ${esc(fmtTime(c.g.start_time))}</span></div>
