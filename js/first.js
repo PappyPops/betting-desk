@@ -6,14 +6,14 @@
 // comes from the earliest kickoff window (games that start together race the same way).
 // While games are on, ESPN's free scoring plays are checked every minute and every TD is marked with the game clock
 // and the time this page first saw it.
-import { esc, pct, fmtTime, fmtDay, footNote, howTo, wireHow, store, seg, onSeg, clearCache } from './core.js?v=202611221855';
-import { redzoneData } from './redzone.js?v=202611221855';
-import { amOf } from './rr.js?v=202611221855';
+import { esc, pct, fmtTime, fmtDay, footNote, howTo, wireHow, store, seg, onSeg, clearCache } from './core.js?v=202611221856';
+import { redzoneData } from './redzone.js?v=202611221856';
+import { amOf } from './rr.js?v=202611221856';
 
 const OTHER = 0.08; // share of TDs scored by defense, special teams, or players not listed
 const etDay = (iso) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z]/g, '');
-const ord = (n) => n === 1 ? '' : `${n}${n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'}-`;
+const ord = (n) => n === 1 ? '' : `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : n % 10 === 1 ? 'st' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : 'th'}-`;
 
 // "Nico Collins 42 Yd pass from C.J. Stroud (kick)" -> "Nico Collins"; "Josh Allen 1 Yd Run" -> "Josh Allen"
 const scorerOf = (text) => String(text || '').replace(/\s+\d+\s+(Yd|Yard|Yds)\b.*$/i, '').replace(/\s+(Fumble|Interception|Punt|Kickoff|Blocked).*$/i, '').trim();
@@ -27,6 +27,7 @@ export async function render(el) {
   const today = etDay(new Date().toISOString());
   const st = { day: days.includes(today) ? today : days.find((d) => d >= today) ?? days[0] };
   let feed = new Map(); // game id -> [{ name, type, period, clock, seen }]
+  let firstPull = true; // touchdowns already on the board when the page opens get no 'seen' time
   const seenAt = store.get('first:seen', {});
 
   // per game: every listed player's rate and chance to score the game's first TD
@@ -58,15 +59,15 @@ export async function render(el) {
         const tds = (j.scoringPlays || []).filter((p) => /touchdown/i.test(p.type?.text || '') || /\bTD\b/.test(p.text || ''));
         feed.set(String(c.g.id), tds.map((p) => {
           const key = `${c.g.id}|${p.id ?? p.text}`;
-          if (!seenAt[key]) seenAt[key] = Date.now();
+          if (seenAt[key] === undefined) seenAt[key] = firstPull ? 0 : Date.now();
           return { name: scorerOf(p.text), text: p.text, type: p.type?.text ?? 'Touchdown', period: p.period?.number, clock: p.clock?.displayValue, team: p.team?.abbreviation, seen: seenAt[key] };
         }));
       } catch { /* keep the last read */ }
     }));
-    store.set('first:seen', seenAt);
+    store.set('first:seen', seenAt); firstPull = false;
   }
   const scored = (x, gid) => { const l = feed.get(String(gid)) || []; const i = l.findIndex((t) => norm(t.name) === norm(x.name)); return i < 0 ? null : { ...l[i], first: i === 0 }; };
-  const stamp = (t) => `${t.period ? `Q${t.period}` : ''} ${t.clock ?? ''} · seen ${new Date(t.seen).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+  const stamp = (t) => `${t.period ? `Q${t.period}` : ''} ${t.clock ?? ''}${t.seen ? ` · seen ${new Date(t.seen).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : ''}`;
 
   function draw() {
     const dayCards = cards.filter((c) => etDay(c.g.start_time) === st.day).sort((a, b) => new Date(a.g.start_time) - new Date(b.g.start_time));
@@ -104,7 +105,7 @@ export async function render(el) {
         ${dayList.map((r, i) => pRow(r.x, r.pDay, r.c, ` · ${esc(r.c.g.data.away.abbr)} @ ${esc(r.c.g.data.home.abbr)} · #${i + 1}`)).join('') || '<div class="dim">No lines for this day yet.</div>'}
         <div class="dim" style="font-size:12px;margin-top:6px">Chance there’s a TD in that window at all: ${pct(anyEarly)}. Even the favorite here is a long shot; that’s the nature of this bet.</div></div>
       <div class="card"><b>TDs so far</b>
-        ${allTD.length ? allTD.sort((a, b) => b.seen - a.seen).map((t) => `<div style="padding:6px 0;border-top:1px solid var(--line);font-size:13px"><b>${esc(t.name)}</b> <span class="dim">${esc(t.team ?? '')} · ${esc(t.c.g.data.away.abbr)} @ ${esc(t.c.g.data.home.abbr)}</span>${t.i === 0 ? ' <span class="chip gold" style="font-size:10px">first of game</span>' : ''}
+        ${allTD.length ? allTD.sort((a, b) => (b.seen - a.seen) || (new Date(b.c.g.start_time) - new Date(a.c.g.start_time)) || (b.period - a.period)).map((t) => `<div style="padding:6px 0;border-top:1px solid var(--line);font-size:13px"><b>${esc(t.name)}</b> <span class="dim">${esc(t.team ?? '')} · ${esc(t.c.g.data.away.abbr)} @ ${esc(t.c.g.data.home.abbr)}</span>${t.i === 0 ? ' <span class="chip gold" style="font-size:10px">first of game</span>' : ''}
           <div class="dim" style="font-size:12px">${esc(stamp(t))} · ${esc(t.type)}</div></div>`).join('') : `<div class="dim" style="font-size:13px;margin-top:6px">${dayCards.some((c) => new Date(c.g.start_time).getTime() <= Date.now()) ? 'No touchdowns yet.' : 'Nothing yet. This fills in once games kick off.'}</div>`}</div></div>
     <div class="sec"><h2>Every game: top 4 to score first</h2><div class="grid g2">${models.map((g) => { const c = g.c, first = (feed.get(String(c.g.id)) || [])[0];
       return `<div class="card"><div class="row" style="justify-content:space-between;font-size:13px"><b>${esc(c.g.data.away.short)} @ ${esc(c.g.data.home.short)}</b><span class="dim">${esc(fmtDay(c.g.start_time))} ${esc(fmtTime(c.g.start_time))}</span></div>
