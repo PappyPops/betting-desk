@@ -2,9 +2,9 @@
 // model's number is far from DraftKings' (and, best of all, the Dunkel Index agrees) make the default list.
 // Ratings are opponent-adjusted (beating a weak team by 30 says less than beating a good one by 10), from the
 // same engine as the simulator, refit each day with only games already played, and graded against the close.
-import { games, api, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn } from './core.js?v=202611221443';
-import { fit, predict } from './sim.js?v=202611221443';
-import { trackBtn } from './mybets.js?v=202611221443';
+import { games, api, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn } from './core.js?v=202611221444';
+import { fit, predict } from './sim.js?v=202611221444';
+import { trackBtn } from './mybets.js?v=202611221444';
 
 const SEASON_START = '2026-11-01';
 const HALF = 8, LAM = 3;            // ratings: 8-week half-life, light pull toward average
@@ -129,7 +129,7 @@ export async function render(el) {
       ${seg('view', [['signals', `Signals (${counts.sig})`], ['both', `Dunkel agrees (${counts.both})`], ['all', `All games (${counts.all})`]], st.view)}
       <input data-act="q" placeholder="Find a team" value="${esc(st.q)}" style="min-width:160px"></div>
     <div class="card" style="padding:4px 12px;overflow-x:auto"><table class="t"><tr><th>Tip</th><th>Game</th><th class="r">DraftKings</th><th class="r">Model</th><th class="r">Dunkel</th><th>Signal</th><th></th></tr>
-      ${list.map(row).join('') || `<tr><td colspan="7" class="muted">${st.view === 'all' ? 'No games with lines in this window yet. Lines go up through the day.' : 'No signals in this window. Lines go up through the day; check back or switch to All games.'}</td></tr>`}</table></div>
+      ${list.map(row).join('') || `<tr><td colspan="7" class="muted">${st.view === 'all' ? 'No games with lines in this window yet. Lines go up through the day.' : st.view === 'both' ? `No games where the model and Dunkel agree in this window (Dunkel has numbers on ${upcoming.filter(inWhen).filter((x) => x.d).length} of them so far). Check Signals, or come back as more lines and Dunkel picks post.` : 'No signals in this window. Lines go up through the day; check back or switch to All games.'}</td></tr>`}</table></div>
     ${footNote('Scores and lines: ESPN (DraftKings), every 10 minutes. Second opinion: the Dunkel Index. Ratings and grading: this site. Not advice.')}`;
     onSeg(el, 'view', (v) => { st.view = v; store.set('court:view2', v); draw(); });
     onSeg(el, 'when', (v) => { st.when = v; store.set('court:when', v); draw(); });

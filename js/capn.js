@@ -1,4 +1,4 @@
-import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611221443';
+import { api, esc, seg, onSeg, store, odds, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, ago, logo } from './core.js?v=202611221444';
 
 const LGS = [['nfl', 'NFL'], ['cfb', 'College'], ['nba', 'NBA']];
 const SRC = { action: 'Action', docs: 'Doc’s', espn: 'ESPN', cbs: 'CBS', pickswise: 'Pickswise', covers: 'Covers', dimers: 'Dimers', espnmodel: 'ESPN', dunkel: 'Dunkel' };
