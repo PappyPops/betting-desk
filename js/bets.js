@@ -1,10 +1,10 @@
 // Best bets: every tool's current reads on the same games, weighted by how each tool has actually done on games
 // it hadn't seen yet. A source with no record, or a record under break-even, gets no weight.
-import { api, games } from './core.js?v=202611221856';
-import { matrixData } from './matrix.js?v=202611221856';
-import { RESEARCH, BREAK_EVEN } from './research.js?v=202611221856';
-import { CUTS, grade as cutGrade } from './linelife.js?v=202611221856';
-import { flagNow, loadFlags, gradeFlags, historyNote } from './moves.js?v=202611221856';
+import { api, apiAll, games } from './core.js?v=202611232234';
+import { matrixData } from './matrix.js?v=202611232234';
+import { RESEARCH, BREAK_EVEN } from './research.js?v=202611232234';
+import { CUTS, grade as cutGrade } from './linelife.js?v=202611232234';
+import { flagNow, loadFlags, gradeFlags, historyNote } from './moves.js?v=202611232234';
 
 const BE = 110 / 210;
 const K = 150; // shrink each record toward break-even as if it had 150 more games at exactly break-even
@@ -32,7 +32,7 @@ export async function bestBets() {
     games({ league: 'nfl', from, to }), games({ league: 'cfb', from, to }), games({ league: 'nba', from, to }),
     api(`juice_bets?select=*&locked=eq.false&start_time=gte.${encodeURIComponent(new Date(now).toISOString())}`, { ttl: 60_000 }),
     api('juice_bets?select=*&locked=eq.true&order=start_time.desc&limit=3000', { ttl: 300_000 }),
-    api(`expert_picks?select=*&starts_at=gte.${encodeURIComponent(new Date(now - 45 * 86400e3).toISOString())}&limit=8000`, { ttl: 300_000 }),
+    apiAll(`expert_picks?select=*&starts_at=gte.${encodeURIComponent(new Date(now - 45 * 86400e3).toISOString())}&order=starts_at.asc,id.asc`, { ttl: 300_000 }),
   ]);
   const G = new Map([...nfl, ...cfb, ...nba].map((g) => [String(g.id), g]));
   const pre = (id) => { const g = G.get(String(id)); return g && g.state === 'pre' && new Date(g.start_time).getTime() > now ? g : null; };

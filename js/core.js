@@ -12,6 +12,21 @@ export async function api(path, { ttl = 60_000 } = {}) {
   cache.set(path, { t: Date.now(), v });
   return v;
 }
+// PostgREST returns at most 1000 rows per request, so page through bigger sets.
+export async function apiAll(path, { ttl = 60_000, page = 1000 } = {}) {
+  const hit = cache.get('all:' + path);
+  if (hit && Date.now() - hit.t < ttl) return hit.v;
+  const out = [];
+  for (let off = 0; off < 50_000; off += page) {
+    const r = await fetch(`${SB_URL}/rest/v1/${path}${path.includes('?') ? '&' : '?'}limit=${page}&offset=${off}`, { headers: { apikey: SB_KEY } });
+    if (!r.ok) throw new Error(`Data request failed (${r.status})`);
+    const rows = await r.json();
+    out.push(...rows);
+    if (rows.length < page) break;
+  }
+  cache.set('all:' + path, { t: Date.now(), v: out });
+  return out;
+}
 export function clearCache() { cache.clear(); }
 
 export async function blob(key, ttl = 30 * 60_000) {
