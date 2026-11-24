@@ -1,8 +1,8 @@
 // Betting Council: Grok, Muse, Gemini and Claude post daily picks, cross-examine each other,
 // and the Final Card is what 3 of 4 back. Claude's scheduled tasks copy each day's files and the
 // ledger from Google Drive into blobs (council:day:YYYY-MM-DD, council:ledger); this page only reads them.
-import { addBet, isTracked } from './mybets.js?v=202611232234';
-import { api, blob, ago, toast } from './core.js?v=202611232234';
+import { addBet, isTracked } from './mybets.js?v=202611241310';
+import { api, blob, ago, toast } from './core.js?v=202611241310';
 
 const CSS = '.council .dayrec{font:600 15px Inter,sans-serif;text-transform:none;color:var(--ink)}.council .dayrec .pos{color:var(--win)}.council .dayrec .neg{color:var(--loss)}.council .colrec{font-size:13px;color:var(--mute);margin:-4px 0 10px}.council .colrec .dayrec{font-size:14px}\n.council .tr{display:flex;gap:6px;align-items:flex-start}.council button.ctrack{padding:0;width:28px;height:28px;border-radius:50%;font:700 17px/1 Inter,sans-serif;background:var(--gold);color:#101411;border:0;flex:none}.council button.ctrack:disabled{opacity:.5}\n.council .tag.u2{background:var(--gold);color:#101411;border-color:var(--gold);font-weight:700}\n.council{\n    --panel:var(--surface); --panel2:var(--surface2); --line:var(--line2);\n    --ink:#e8ecf1; --mute:#8a95a5; --dim:#5d6876;\n    --win:#2fbf71; --loss:#e5484d; --push:#d1a23b; --pend:#5d6876;\n    --grok:#e8ecf1; --muse:#4f8cff; --gemini:#34c3a0; --claude:#d97757; --card:#f5c542;\n  }\n.council .wrap{max-width:1180px;margin:0 auto;padding:18px 16px 40px}\n.council header{display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between;margin-bottom:16px}\n.council .datebar{display:flex;align-items:center;gap:6px}\n.council button{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 11px;font:600 13px Inter,sans-serif;cursor:pointer}\n.council button:hover{border-color:var(--mute)}\n.council input[type=date]{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:500 13px Inter,sans-serif;color-scheme:dark}\n.council .status{font-size:12px;color:var(--mute);min-height:18px;margin:-6px 0 12px}\n.council .status.err{color:var(--loss)}\n.council .records{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}\n.council .rec{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;border-top:3px solid var(--c)}\n.council .rec .who{font:700 15px "Barlow Condensed",sans-serif;text-transform:uppercase;color:var(--c)}\n.council .rec .units{font:700 28px "Barlow Condensed",sans-serif}\n.council .rec .units.pos{color:var(--win)}\n.council .rec .units.neg{color:var(--loss)}\n.council .rec .sub{font-size:12px;color:var(--mute)}\n.council section.final{background:linear-gradient(180deg,#221f12,var(--panel));border:1px solid #4a4020;border-radius:14px;padding:14px 16px;margin-bottom:18px}\n.council section.final h2{font-size:22px;text-transform:uppercase;color:var(--card);margin-bottom:10px}\n.council .finalgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}\n.council .cols{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}\n.council .col{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;border-top:3px solid var(--c)}\n.council .col h2{font-size:21px;text-transform:uppercase;color:var(--c);display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}\n.council .col h2 small{font:500 12px Inter,sans-serif;color:var(--mute);text-transform:none}\n.council .pick{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px;border-left:4px solid var(--rc,var(--pend))}\n.council .pick .top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}\n.council .sel{font:700 19px "Barlow Condensed",sans-serif;line-height:1.15}\n.council .badge{font:700 12px Inter,sans-serif;padding:3px 8px;border-radius:6px;white-space:nowrap;background:var(--rc,var(--pend));color:#0f1216}\n.council .meta{font-size:12px;color:var(--mute);margin-top:3px}\n.council .meta b{color:var(--ink);font-weight:600}\n.council .tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}\n.council .tag{font-size:11px;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--mute)}\n.council .tag.alt{border-color:var(--push);color:var(--push)}\n.council .tag.fc{border-color:var(--card);color:var(--card)}\n.council .verdicts{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}\n.council .v{font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px;cursor:pointer;border:1px solid transparent}\n.council .v.agree{background:#173826;color:var(--win)}\n.council .v.disagree{background:#3a1b1d;color:var(--loss)}\n.council .v.pass{background:#262b33;color:var(--mute)}\n.council details{margin-top:7px}\n.council summary{font-size:12px;color:var(--mute);cursor:pointer}\n.council details p{margin:6px 0 0;font-size:13px;color:#c5ccd6}\n.council .why{font-size:12.5px;color:#c5ccd6;margin-top:6px;padding:7px 9px;background:#14181d;border-radius:7px;display:none}\n.council .why.show{display:block}\n.council .empty{color:var(--dim);font-size:13px;padding:14px 4px;text-align:center}\n.council .changes{font-size:12px;color:var(--mute);margin-top:6px;border-top:1px dashed var(--line);padding-top:8px}\n.council .backed{font-size:12px;color:var(--card);margin-top:5px}\n.council footer{margin-top:22px;font-size:12px;color:var(--dim);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}\n.council footer a{color:var(--mute)}\n.council .gate{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px;display:none}\n@media (max-width:1100px){.council .cols{grid-template-columns:repeat(2,1fr)}.council .records{grid-template-columns:repeat(3,1fr)}}\n@media (max-width:700px){.council .cols{grid-template-columns:1fr}.council .records{grid-template-columns:repeat(2,1fr)}}';
 const SCHED_KEY = "__schedule";
@@ -83,6 +83,12 @@ function parseLate(text){
     const f = fields(p);
     if (m) out[+m[1]] = {action:(f.action||"").toUpperCase(), line:f["new line"]||"", why:f.why||""};
   });
+  return out;
+}
+// Picks a member dropped, from the rebuttal's "CHANGES TO MY CARD: drop PICK N ..." line (number -> reason text).
+function parseDrops(changes){
+  const out = {}; if (!changes) return out;
+  changes.split(/;|\band\b(?=\s+drop)/i).forEach(seg=>{ const m = seg.match(/\bdrop(?:ped)?\s+PICK\s*(\d+)/i); if (m) out[+m[1]] = changes.trim(); });
   return out;
 }
 const cap = s => s.charAt(0).toUpperCase()+s.slice(1).toLowerCase();
@@ -211,8 +217,10 @@ document.addEventListener("click", async e => {
   b.disabled = false;
 });
 
-function pickCard(p, member, date, ledger, verdicts, late){
+function pickCard(p, member, date, ledger, verdicts, late, dropWhy){
   const res = resultFor(ledger.rows, date, member, p, late);
+  const dropped = !(res && rc(res)) && ((late && late.action === "DROP") || !!dropWhy);
+  const dropNote = dropped ? ((late && late.action === "DROP" && late.why) || dropWhy || "") : "";
   const r = rc(res);
   const isAlt = /\bALT\b/i.test(p.bet||"");
   const is2u = parseFloat(p.units) >= 2;
@@ -223,12 +231,12 @@ function pickCard(p, member, date, ledger, verdicts, late){
     return `<span class="v ${cls}" data-why="${id}">${esc(v.from)}: ${esc(v.verdict||"?")}</span>`;
   }).join("");
   const whys = verdicts.map((v,i)=>`<div class="why" id="w-${member}-${p.num}-${i}"><b>${esc(v.from)}:</b> ${esc(v.why)}</div>`).join("");
-  return `<div class="pick" style="--rc:${RC[r]||"var(--pend)"}">
-    <div class="top"><div class="sel">${esc(p.selection||"(no selection)")}</div><div class="tr">${badge(res)}${res && rc(res) ? "" : trackBtnC(p, member, date)}</div></div>
+  return `<div class="pick" style="--rc:${RC[r]||"var(--pend)"}${dropped?";opacity:.7":""}">
+    <div class="top"><div class="sel">${esc(p.selection||"(no selection)")}</div><div class="tr">${dropped ? `<span class="badge" style="--rc:var(--dim)" title="${esc(dropNote)}">DROPPED</span>` : badge(res)}${(res && rc(res)) || dropped ? "" : trackBtnC(p, member, date)}</div></div>
     ${prop}
     <div class="meta">${esc(p.sport||"")} · ${esc(p.game||"")}${p.start?` · ${esc(p.start)}`:""}</div>
     <div class="meta"><b>${esc(p.odds||"")}</b> ${esc(p.book||"")} · ${esc(p.bet||"")} · Conf ${esc(p.confidence||"–")}</div>
-    <div class="tags">${is2u?'<span class="tag u2">2U PLAY</span>':""}${late&&late.action?`<span class="tag alt" title="${esc(late.why)}">LATE: ${esc(late.action)}${late.line?" → "+esc(late.line):""}</span>`:""}${isAlt?'<span class="tag alt">ALT line</span>':""}${res&&res.fc?'<span class="tag fc">Final Card</span>':""}</div>
+    <div class="tags">${is2u?'<span class="tag u2">2U PLAY</span>':""}${late&&late.action?`<span class="tag alt" title="${esc(late.why)}">LATE: ${esc(late.action)}${late.line?" → "+esc(late.line):""}</span>`:""}${dropped?`<span class="tag alt">Dropped before the games - not graded</span>`:""}${isAlt?'<span class="tag alt">ALT line</span>':""}${res&&res.fc?'<span class="tag fc">Final Card</span>':""}</div>
     ${vh?`<div class="verdicts">${vh}</div>${whys}`:""}
     ${p.reasoning?`<details><summary>Reasoning</summary><p>${esc(p.reasoning)}</p></details>`:""}
   </div>`;
@@ -258,7 +266,8 @@ function render_(date, files, ledger){
     const fileExists = (`${date} ${m.key} Picks`) in files;
     let body;
     const late = parseLate(files[`${date} ${m.key} Late Check`]);
-    if (list && list.length) body = list.map(p=>pickCard(p, m.key, date, ledger, aimed[m.key+"#"+p.num]||[], late[p.num])).join("");
+    const drops = parseDrops(rebut[m.key] && rebut[m.key].changes);
+    if (list && list.length) body = list.map(p=>pickCard(p, m.key, date, ledger, aimed[m.key+"#"+p.num]||[], late[p.num], drops[p.num])).join("");
     else body = `<div class="empty">${fileExists ? "No picks posted yet." : "No file for this date."}</div>`;
     const rb = rebut[m.key];
     const changes = rb && rb.changes ? `<div class="changes">Changes to card: ${esc(rb.changes)}</div>` : "";

@@ -2,8 +2,8 @@
 // A leg's chance starts from the market's own price with the book's cut removed (a coin flip at -110/-110).
 // When the Today page's best bets back that exact side, its graded edge is added. The ticket's chance is the legs
 // multiplied together, which is right for different games; same-game legs get flagged because they move together.
-import { games, esc, logo, line, odds, pct, decOdds, fmtDay, fmtTime, store, copy } from './core.js?v=202611232234';
-import { bestBets } from './bets.js?v=202611232234';
+import { games, esc, logo, line, odds, pct, decOdds, fmtDay, fmtTime, store, copy } from './core.js?v=202611241310';
+import { bestBets } from './bets.js?v=202611241310';
 
 const LG = [['nfl', 'NFL'], ['cfb', 'College FB'], ['nba', 'NBA']];
 const amOf = (dec) => dec >= 2 ? Math.round((dec - 1) * 100) : Math.round(-100 / (dec - 1));
