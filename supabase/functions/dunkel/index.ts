@@ -12,8 +12,12 @@ function hid(s: string) {
   for (let i = 0; i < s.length; i++) { a = Math.imul(a ^ s.charCodeAt(i), 16777619) >>> 0; b = Math.imul(b ^ s.charCodeAt(i), 2246822519) >>> 0; }
   return 4e15 + (a % 2 ** 20) * 2 ** 26 + (b % 2 ** 26);
 }
-const PAGE: Record<string, string> = { nfl: 'nfl', cfb: 'fbs', nba: 'nba', cbb: 'ncaa-basketball' };
+// Dunkel's page shows only the first 10 games; the rest (and each day's slate) load from a JSON feed the page's own
+// "Load more" button calls. League ids on that feed: NFL 1, FBS 2, NBA 4, NCAA men's 6. Dunkel posts a game's numbers
+// on the day it's played, so a date past today comes back empty.
+const LID: Record<string, number> = { nfl: 1, cfb: 2, nba: 4, cbb: 6 };
 const EXPERT = hid('dunkel');
+const JH = { ...UA, 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
 
 // every way a team might be written: "Buffalo Bills", "Buffalo", "Bills"
 function keys(t: any) {
@@ -21,52 +25,64 @@ function keys(t: any) {
   const loc = nick && name.endsWith(nick) ? name.slice(0, -nick.length).trim() : '';
   return [...new Set([name, loc, t?.short].filter((x) => x && x.length > 2).map(norm))];
 }
-// position of a team's name in normalized text (last occurrence at or before `before`)
-function posOf(text: string, t: any, before = Infinity) {
-  let best = -1;
-  for (const k of keys(t)) { let i = text.indexOf(k); while (i !== -1 && i <= before) { if (i > best) best = i; i = text.indexOf(k, i + 1); } }
-  return best;
+function etOffset() {
+  const z = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', timeZoneName: 'longOffset' }).match(/GMT([+-]\d\d:\d\d)/);
+  return z ? z[1] : '-05:00';
+}
+async function feed(lid: number, q: Record<string, string>) {
+  const r = await fetch(`https://www.dunkelindex.com/picks/get/${lid}?${new URLSearchParams(q)}`, { headers: JH, signal: AbortSignal.timeout(20000) });
+  if (!r.ok) throw new Error(`${r.status}`);
+  const j = await r.json();
+  return (j?.games ?? []) as any[];
+}
+// the default list (today's slate, 10 games a page) plus the next few days, so nothing waits for a refresh
+async function dunkelGames(lg: string) {
+  const lid = LID[lg], tz = etOffset(), out = new Map<string, any>();
+  for (let page = 1; page <= 12; page++) {
+    const gs = await feed(lid, { page: String(page), tz, exclusion: 'leagues,teams' });
+    for (const g of gs) out.set(String(g.id), g);
+    if (gs.length < 10) break;
+  }
+  for (let i = 0; i < 4; i++) {
+    const day = new Date(Date.now() + i * 86400e3).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    try { for (const g of await feed(lid, { date: day, tz })) out.set(String(g.id), g); } catch (_) { /* a missing day isn't fatal */ }
+  }
+  return [...out.values()];
 }
 
 async function league(lg: string) {
-  const r = await fetch(`https://www.dunkelindex.com/picks/${PAGE[lg]}`, { headers: UA, signal: AbortSignal.timeout(20000) });
-  if (!r.ok) throw new Error(`${r.status}`);
-  const text = (await r.text()).replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
+  const dk = await dunkelGames(lg);
   const { data: games } = await sb.from('games').select('id,start_time,state,data').eq('league', lg).eq('state', 'pre')
     .gte('start_time', new Date(Date.now() - 3600e3).toISOString()).lt('start_time', new Date(Date.now() + 8 * 86400e3).toISOString()).limit(3000);
-  const chunks = text.split(/Bonus Code:\s*DUNKEL/i);
   const rows = new Map<string, any>(), picks: any[] = [];
-  for (const raw of chunks) {
-    // drop page furniture (the team-filter menu lists every team) before the game's own block
-    const r0 = raw.indexOf('RANKING'); if (r0 < 0) continue;
-    const c = raw.slice(Math.max(0, r0 - 120));
-    const pm = c.match(/DUNKEL PREDICTION\s+(.+?)\s+Winning Margin:\s*(-?[\d.]+)\s+Total Score:\s*([\d.]+)\s+VEGAS PREDICTION\s+(.+?)\s+Winning Margin:\s*(-?[\d.]+)\s+Total Score:\s*([\d.]+)/i);
-    if (!pm) continue;
-    const n = norm(c);
-    // the game whose two teams both appear in this block; earliest start if a matchup repeats
-    // the teams Dunkel and Vegas name must be this game's two teams (a nickname like "Cowboys" or "Wildcats" settles
-    // look-alikes such as Arizona and Arizona State)
-    const named = [norm(pm[1]), norm(pm[4])];
-    const isTeam = (t: any, k: string) => [...keys(t), norm(t?.nick ?? '')].filter(Boolean).some((x) => x === k || (k.length > 3 && x.endsWith(k)));
-    const g: any = (games ?? []).filter((x: any) => posOf(n, x.data?.home) >= 0 && posOf(n, x.data?.away) >= 0 && named.every((k) => isTeam(x.data?.home, k) || isTeam(x.data?.away, k)))
-      .sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())[0];
+  const isTeam = (t: any, full: string, nick: string) => keys(t).includes(norm(full)) || (!!nick && norm(t?.nick ?? '') === norm(nick) && !!norm(t?.nick ?? ''));
+  const now = new Date().toISOString();
+  for (const d of dk) {
+    if (!/^pre|^sched|^$/i.test(d.status ?? '') && /final|F\//i.test(d.status ?? '')) continue;
+    const t0 = Date.parse(String(d.date_of_match_utc).replace(' ', 'T') + 'Z');
+    // the ESPN game in the same hour with both teams (either way round, for neutral sites)
+    const g: any = (games ?? []).filter((x: any) => Math.abs(Date.parse(x.start_time) - t0) < 3 * 3600e3)
+      .filter((x: any) => (isTeam(x.data?.home, d.home_team_full_name, d.home_team_name) && isTeam(x.data?.away, d.away_team_full_name, d.away_team_name))
+        || (isTeam(x.data?.home, d.away_team_full_name, d.away_team_name) && isTeam(x.data?.away, d.home_team_full_name, d.home_team_name)))
+      .sort((a: any, b: any) => Math.abs(Date.parse(a.start_time) - t0) - Math.abs(Date.parse(b.start_time) - t0))[0];
     if (!g || rows.has(String(g.id))) continue;
-    const row: any = { game_id: String(g.id), league: lg, dunkel_team: pm[1].trim(), dunkel_margin: Number(pm[2]), dunkel_total: Number(pm[3]), vegas_team: pm[4].trim(), vegas_margin: Number(pm[5]), vegas_total: Number(pm[6]), updated_at: new Date().toISOString() };
-    // the spread pick sits inside the block of the team it's on
-    const pk = c.match(/Dunkel Pick:\s*\(\s*([+-]?[\d.]+|PK|pk|EVEN)\s*\)\s*(Over|Under)?/i);
-    if (pk) {
-      const at = norm(c.slice(0, pk.index)).length;
-      const ph = posOf(n, g.data.home, at), pa = posOf(n, g.data.away, at);
-      const side = ph > pa ? 'home' : pa >= 0 ? 'away' : null;
-      const val = /pk|even/i.test(pk[1]) ? 0 : Number(pk[1]);
-      if (side && Number.isFinite(val)) {
-        row.pick_side = side; row.pick_line = val;
-        picks.push({ id: hid(`dunkel:${g.id}:spread`), expert_id: EXPERT, source: 'dunkel', league: lg, action_game_id: null, espn_id: String(g.id), type: `spread_${side}`, side, value: val, play: `${g.data[side]?.short ?? side} ${val > 0 ? '+' : ''}${val === 0 ? 'PK' : val}`, odds: -110, units: null, starts_at: g.start_time, created_at: new Date().toISOString(), status: 'published', updated_at: new Date().toISOString() });
-      }
-      if (pk[2]) {
-        const tp = pk[2].toLowerCase(); row.total_pick = tp;
-        picks.push({ id: hid(`dunkel:${g.id}:total`), expert_id: EXPERT, source: 'dunkel', league: lg, action_game_id: null, espn_id: String(g.id), type: tp, side: tp, value: row.vegas_total, play: `${tp === 'over' ? 'Over' : 'Under'} ${row.vegas_total} (Dunkel ${row.dunkel_total})`, odds: -110, units: null, starts_at: g.start_time, created_at: new Date().toISOString(), status: 'published', updated_at: new Date().toISOString() });
-      }
+    const dkTotal = Number(d.dunkel_total), vegTotal = Number(d.over_under);
+    if (!Number.isFinite(dkTotal)) continue;
+    const row: any = { game_id: String(g.id), league: lg, dunkel_team: d.dunkel_pick_name ?? null, dunkel_margin: Number.isFinite(Number(d.dunkel_line)) ? -Number(d.dunkel_line) : null,
+      dunkel_total: dkTotal, vegas_team: d.vegas_pick_name ?? null, vegas_margin: Number.isFinite(Number(d.vegas_line)) ? Number(d.vegas_line) : null, vegas_total: Number.isFinite(vegTotal) ? vegTotal : null, updated_at: now };
+    // the spread pick: Dunkel's recommended team, at the number Vegas has for that team
+    const rec = String(d.team_recommendation ?? '');
+    const val = /^(pk|even)$/i.test(String(d.money_line ?? '').trim()) ? 0 : Number(d.money_line);
+    if (rec && Number.isFinite(val)) {
+      const recHome = rec === String(d.home_team_id);
+      const side = (isTeam(g.data?.home, recHome ? d.home_team_full_name : d.away_team_full_name, recHome ? d.home_team_name : d.away_team_name)) ? 'home' : 'away';
+      row.pick_side = side; row.pick_line = val;
+      picks.push({ id: hid(`dunkel:${g.id}:spread`), expert_id: EXPERT, source: 'dunkel', league: lg, action_game_id: null, espn_id: String(g.id), type: `spread_${side}`, side, value: val, play: `${g.data[side]?.short ?? side} ${val > 0 ? '+' : ''}${val === 0 ? 'PK' : val}`, odds: -110, units: null, starts_at: g.start_time, created_at: now, status: 'published', updated_at: now });
+    }
+    const tp = String(d.dunkel_over_under ?? '').toLowerCase();
+    if ((tp === 'over' || tp === 'under') && row.vegas_total !== null) {
+      row.total_pick = tp;
+      picks.push({ id: hid(`dunkel:${g.id}:total`), expert_id: EXPERT, source: 'dunkel', league: lg, action_game_id: null, espn_id: String(g.id), type: tp, side: tp, value: row.vegas_total, play: `${tp === 'over' ? 'Over' : 'Under'} ${row.vegas_total} (Dunkel ${row.dunkel_total})`, odds: -110, units: null, starts_at: g.start_time, created_at: now, status: 'published', updated_at: now });
     }
     rows.set(String(g.id), row);
   }
@@ -84,7 +100,7 @@ async function league(lg: string) {
     const fresh = picks.filter((p) => !skip.has(p.id));
     if (fresh.length) await sb.from('expert_picks').upsert(fresh);
   }
-  return { games: rows.size, picks: picks.length };
+  return { feed: dk.length, games: rows.size, picks: picks.length };
 }
 
 Deno.serve(async () => {
