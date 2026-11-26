@@ -1,5 +1,5 @@
 // NFL history from nflverse (open data): every game since 2002 with the closing spread and total.
-import { blob } from './core.js?v=202611241310';
+import { blob } from './core.js?v=202611260314';
 
 let memo = null;
 export async function nflHist() {

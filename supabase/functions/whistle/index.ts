@@ -1,6 +1,7 @@
 // At the Whistle: at the end of Q1, halftime and the end of Q3 of every NFL game, saves the box score so far and
 // DraftKings' live player props (ESPN provider 200) at that moment. When a game ends, saves the final box (period 4)
-// so every ticket can be graded. Runs every minute during NFL hours (see supabase/cron.sql).
+// so every ticket can be graded. While a game is on it also keeps a rolling "live" read (period 0) fresh.
+// Runs every minute during NFL hours (see supabase/cron.sql).
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
@@ -47,23 +48,28 @@ Deno.serve(async () => {
     const c = ev.competitions?.[0]; const s = c?.status ?? ev.status; const name = s?.type?.name ?? '';
     // ESPN often skips STATUS_END_PERIOD at the 1st/3rd quarter breaks or shows it for under a minute, so also take
     // the snapshot at 0:00 of a quarter, or (late) in the first minute of the next one, flagged so it can be told apart.
-    const live = s?.type?.state === 'in', clock = Number(s?.clock ?? -1);
+    const inProg = s?.type?.state === 'in', clock = Number(s?.clock ?? -1);
     let brk: number | null = null, late = false;
     if (name === 'STATUS_HALFTIME' || name === 'STATUS_END_PERIOD') brk = s.period;
-    else if (live && clock === 0) brk = s.period;
-    else if (live && s.period >= 2 && s.period <= 4 && clock >= 840) { brk = s.period - 1; late = true; }
+    else if (inProg && clock === 0) brk = s.period;
+    else if (inProg && s.period >= 2 && s.period <= 4 && clock >= 840) { brk = s.period - 1; late = true; }
     if (brk !== null && (brk < 1 || brk > 3)) brk = null;
     const final = s?.type?.state === 'post';
-    if (brk === null && !final) continue;
-    const period = final ? 4 : brk!;
+    if (brk === null && !final && !inProg) continue;
     if (final && Date.now() - new Date(ev.date).getTime() > 2 * 86400e3) continue;
-    const { data: have } = await sb.from('whistle_snaps').select('period').eq('game_id', ev.id).eq('period', period);
-    if (have?.length) continue;
+    const period = final ? 4 : brk;
+    let needSnap = false;
+    if (period !== null) { const { data: have } = await sb.from('whistle_snaps').select('period').eq('game_id', ev.id).eq('period', period); needSnap = !have?.length; }
+    if (!needSnap && !inProg) continue;
     const home = c.competitors.find((t: any) => t.homeAway === 'home'), away = c.competitors.find((t: any) => t.homeAway === 'away');
     const sum = await j(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${ev.id}`);
-    const row = { game_id: ev.id, period, ts: new Date().toISOString(), home_pts: n(home?.score), away_pts: n(away?.score), box: parseBox(sum), live: final ? null : await liveProps(ev.id), late };
-    await sb.from('whistle_snaps').upsert(row);
-    done.push({ id: ev.id, period, players: Object.keys(row.box).length, live: row.live?.length ?? 0 });
+    const box = parseBox(sum), lp = final ? null : await liveProps(ev.id);
+    const base = { game_id: ev.id, ts: new Date().toISOString(), home_pts: n(home?.score), away_pts: n(away?.score), box, live: lp };
+    // the locked snapshot: written once, at the whistle
+    if (needSnap) { await sb.from('whistle_snaps').upsert({ ...base, period, late }); done.push({ id: ev.id, period, players: Object.keys(box).length, live: lp?.length ?? 0 }); }
+    // period 0 is the in-progress read the page shows as "Live": rewritten every minute, dropped at the final
+    if (inProg) { await sb.from('whistle_snaps').upsert({ ...base, period: 0, late: false, meta: { period: s.period, clock, display: s.displayClock, detail: s.type?.shortDetail ?? null } }); done.push({ id: ev.id, live_row: true }); }
+    if (final) await sb.from('whistle_snaps').delete().eq('game_id', ev.id).eq('period', 0);
   }
   return new Response(JSON.stringify(done), { headers: { 'content-type': 'application/json' } });
 });

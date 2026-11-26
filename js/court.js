@@ -2,9 +2,9 @@
 // model's number is far from DraftKings' (and, best of all, the Dunkel Index agrees) make the default list.
 // Ratings are opponent-adjusted (beating a weak team by 30 says less than beating a good one by 10), from the
 // same engine as the simulator, refit each day with only games already played, and graded against the close.
-import { games, api, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn } from './core.js?v=202611241310';
-import { fit, predict } from './sim.js?v=202611241310';
-import { trackBtn } from './mybets.js?v=202611241310';
+import { games, api, esc, logo, seg, onSeg, store, pct, line, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn } from './core.js?v=202611260314';
+import { fit, predict } from './sim.js?v=202611260314';
+import { trackBtn } from './mybets.js?v=202611260314';
 
 const SEASON_START = '2026-11-01';
 const HALF = 8, LAM = 3;            // ratings: 8-week half-life, light pull toward average

@@ -1,7 +1,7 @@
 // Shared NFL player-prop model for Slant (before kickoff) and At the Whistle (at each quarter break).
 // Projections use only weeks before the game, so past weeks can be checked honestly.
-import { api, blob, ncdf } from './core.js?v=202611241310';
-import { nflHist } from './hist.js?v=202611241310';
+import { api, blob, ncdf } from './core.js?v=202611260314';
+import { nflHist } from './hist.js?v=202611260314';
 
 export const STATS = {
   pass_yds: { label: 'Pass yds', cols: ['passing_yards'], box: ['pass_yds'], pos: ['QB'], yards: true },
@@ -215,7 +215,9 @@ export function atWhistle({ stat, prior, now, long = 0, period, lead }) {
   const e = period / 4, r = 1 - e;
   const cleaned = STATS[stat].yards && long > 25 ? now - (long - 15) : now; // one long play doesn't set the pace
   const pace = Math.max(0, cleaned) / e;
-  const w = { 1: 0.75, 2: 0.6, 3: 0.5 }[period];
+  // weight on the pregame expectation; exact at the whistles (1, 2, 3), interpolated for a live read mid-quarter
+  const W = [[0, 0.9], [1, 0.75], [2, 0.6], [3, 0.5], [4, 0.45]], i = Math.min(3, Math.floor(period));
+  const w = W[i][1] + (W[i + 1][1] - W[i][1]) * (period - W[i][0]);
   let rate = w * prior + (1 - w) * pace;
   let script = 1, note = 'Score close. Game script near the open.';
   if (period >= 2 && Math.abs(lead) >= 10) {

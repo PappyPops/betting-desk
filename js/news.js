@@ -1,6 +1,7 @@
 // What's new: the changes worth knowing about, newest first. Add an entry for each real feature, not for fixes.
 // tool = the page it links to (the sidebar id), or null.
 export const NEWS = [
+  { date: '2026-11-25', tool: 'whistle', title: 'At the Whistle: pick a game', text: 'A slate across the top with every game’s score and clock. Tap one to see its live tickets first, updated every minute, then what locked at each whistle (End Q3, Halftime, End Q1) below, with hits and misses once the game is final.' },
   { date: '2026-11-22', tool: 'first', title: 'Redzone FIRST', text: 'The top 15 to score the first touchdown of the day and the top 4 in every game, with why. During games it checks ESPN every minute and marks each touchdown with the game clock and the time it was seen.' },
   { date: '2026-11-22', tool: 'redzone', title: 'Round robin: pick your players', text: 'Choose from everyone 50%+ to score this week. Each comes with an estimated book price so the results show right away; type your book’s price for the exact return. Best bets to score moved into the builder.' },
   { date: '2026-11-22', tool: 'court', title: 'Full Court: college basketball', text: 'Every Division I game rated (adjusted for who each team played), with the Dunkel Index as a second opinion. By default it shows only games where the numbers are well off DraftKings, gold when Dunkel agrees, and grades itself at the close every night.' },
