@@ -1,9 +1,9 @@
 // At the Whistle: NFL live player props at the end of Q1, halftime and the end of Q3. Each ticket is the projected
 // final against the line at that moment, locked at the whistle and graded on the final box score.
-import { api, apiAll, ago, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611260323';
-import { STATS, TYPE_GROUP, propData, project, atWhistle, boxVal, calibrate } from './propmodel.js?v=202611260323';
-import { trackBtn } from './mybets.js?v=202611260323';
-import { ncdf } from './core.js?v=202611260323';
+import { api, apiAll, ago, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611260325';
+import { STATS, TYPE_GROUP, propData, project, atWhistle, boxVal, calibrate } from './propmodel.js?v=202611260325';
+import { trackBtn } from './mybets.js?v=202611260325';
+import { ncdf } from './core.js?v=202611260325';
 
 const QN = { 0: 'Live', 1: 'End Q1', 2: 'Halftime', 3: 'End Q3' };
 const NEED = { over: 0.6, under: 0.58 }; // overs need more of an edge than unders
@@ -71,6 +71,7 @@ export async function tickets() {
       const pS = side === 'over' ? pOver : 1 - pOver;
       let result = null, final = null;
       if (fin) { final = boxVal(fin.box?.[String(p.athlete_id)] || {}, p.stat); result = final === ln ? 'P' : (final > ln) === (side === 'over') ? 'W' : 'L'; }
+      if (q === 0 && src !== 'live') continue; // a live read needs the book's live number; against a stale pregame line it isn't a bet
       const dest = q === 0 ? liveList : list;
       dest.push({ p, g, a, pos, q, s, now, m, ln, src, pre, side, pS, edge: side === 'over' ? m.fair - ln : ln - m.fair, result, final, week: hg?.week ?? null, team: espnTeam ?? team });
     }
@@ -117,7 +118,7 @@ export async function render(el) {
     const nowMs = Date.now();
     const finals = new Set(T.snaps.filter((s) => s.period === 4).map((s) => String(s.game_id)));
     const liveSnaps = new Map(T.snaps.filter((s) => s.period === 0 && s.meta && !finals.has(String(s.game_id)) && nowMs - Date.parse(s.ts) < 10 * 60e3).map((s) => [String(s.game_id), s]));
-    const cnt = new Map(); for (const t of [...T.liveList, ...list]) { const k = String(t.p.game_id); cnt.set(k, (cnt.get(k) || 0) + 1); }
+    const cnt = new Map(); for (const t of [...T.liveList, ...list.filter((x) => x.src === 'live')]) { const k = String(t.p.game_id); cnt.set(k, (cnt.get(k) || 0) + 1); }
     const slate = (T.sched || []).filter((g) => g.state !== 'post' && !finals.has(String(g.id))).sort((a, b) => (liveSnaps.has(String(b.id)) - liveSnaps.has(String(a.id))) || Date.parse(a.start_time) - Date.parse(b.start_time));
     const gcard = (g) => { const id = String(g.id), ls = liveSnaps.get(id); const hp = ls ? ls.home_pts : g.home_score ?? 0, ap = ls ? ls.away_pts : g.away_score ?? 0, n = cnt.get(id) || 0;
       const status = ls ? (/half|end/i.test(ls.meta.detail || '') ? ls.meta.detail : `Q${ls.meta.period} ${ls.meta.display}`) : `${fmtDay(g.start_time)} · ${fmtTime(g.start_time)}`;
@@ -145,7 +146,7 @@ export async function render(el) {
         <div class="row" style="margin:10px 0;gap:8px;flex-wrap:wrap">${seg('ty', [['all', 'All'], ['Pass', 'Pass'], ['Rush', 'Rush'], ['Rec', 'Rec']], st.ty)} ${seg('pos', [['all', 'All'], ['QB', 'QB'], ['RB', 'RB'], ['WR', 'WR'], ['TE', 'TE']], st.pos)}</div>
         <div class="sec"><h2 style="font-size:20px">Live</h2>
           <p class="sub">${ls ? `${esc(ls.meta.detail || 'In progress')} · updated ${esc(ago(new Date(ls.ts)))}. These move until the quarter ends, then lock below.` : 'Live tickets appear once the game is under way. Each one locks at the end of Q1, halftime and the end of Q3.'}</p>
-          ${ls ? (liveT.length ? `<div class="grid g2">${liveT.map(card).join('')}</div>` : '<div class="empty">Nothing is a 58%+ shot right now. It updates every minute.</div>') : ''}</div>
+          ${ls ? (liveT.length ? `<div class="grid g2">${liveT.map(card).join('')}</div>` : '<div class="empty">No live-line ticket right now. A ticket needs DraftKings’ live number on the player and a 58%+ shot against it; it updates every minute.</div>') : ''}</div>
         ${lockedSec}</div>`;
     }
     const wkSel = st.wk === 'all' ? (weeks[weeks.length - 1] ?? null) : Number(st.wk);

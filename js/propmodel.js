@@ -1,7 +1,7 @@
 // Shared NFL player-prop model for Slant (before kickoff) and At the Whistle (at each quarter break).
 // Projections use only weeks before the game, so past weeks can be checked honestly.
-import { api, blob, ncdf } from './core.js?v=202611260323';
-import { nflHist } from './hist.js?v=202611260323';
+import { api, blob, ncdf } from './core.js?v=202611260325';
+import { nflHist } from './hist.js?v=202611260325';
 
 export const STATS = {
   pass_yds: { label: 'Pass yds', cols: ['passing_yards'], box: ['pass_yds'], pos: ['QB'], yards: true },
