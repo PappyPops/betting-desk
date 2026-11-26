@@ -1,9 +1,9 @@
 // At the Whistle: NFL live player props at the end of Q1, halftime and the end of Q3. Each ticket is the projected
 // final against the line at that moment, locked at the whistle and graded on the final box score.
-import { api, apiAll, ago, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611260317';
-import { STATS, TYPE_GROUP, propData, project, atWhistle, boxVal, calibrate } from './propmodel.js?v=202611260317';
-import { trackBtn } from './mybets.js?v=202611260317';
-import { ncdf } from './core.js?v=202611260317';
+import { api, apiAll, ago, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611260323';
+import { STATS, TYPE_GROUP, propData, project, atWhistle, boxVal, calibrate } from './propmodel.js?v=202611260323';
+import { trackBtn } from './mybets.js?v=202611260323';
+import { ncdf } from './core.js?v=202611260323';
 
 const QN = { 0: 'Live', 1: 'End Q1', 2: 'Halftime', 3: 'End Q3' };
 const NEED = { over: 0.6, under: 0.58 }; // overs need more of an edge than unders
@@ -25,7 +25,7 @@ export async function tickets() {
   calibrate(d);
   const snaps = await apiAll('whistle_snaps?select=*&order=ts.asc,game_id.asc,period.asc', { ttl: 20_000 });
   const ids = [...new Set(snaps.map((s) => s.game_id))];
-  if (!ids.length) return { list: [], live: [], snaps, G: new Map() };
+  if (!ids.length) return { list: [], liveList: [], snaps, G: new Map() };
   const props = [], G = new Map();
   for (let i = 0; i < ids.length; i += 60) {
     const part = ids.slice(i, i + 60).join(',');
@@ -33,7 +33,7 @@ export async function tickets() {
     for (const g of await api(`games?select=id,start_time,state,home,away,home_score,away_score,data&id=in.(${part})`, { ttl: 60_000 })) G.set(String(g.id), g);
   }
   const byGame = new Map(); for (const s of snaps) { if (!byGame.has(s.game_id)) byGame.set(s.game_id, {}); byGame.get(s.game_id)[s.period] = s; }
-  const list = [], live = []; // live = the in-progress read (period 0); list = tickets locked at a whistle
+  const list = [], liveList = []; // live = the in-progress read (period 0); list = tickets locked at a whistle
   for (const p of props) {
     const g = G.get(String(p.game_id)), sn = byGame.get(p.game_id), hg = d.week.get(String(p.game_id)), a = d.ath.get(String(p.athlete_id));
     if (!g || !sn || !a) continue;
@@ -71,11 +71,11 @@ export async function tickets() {
       const pS = side === 'over' ? pOver : 1 - pOver;
       let result = null, final = null;
       if (fin) { final = boxVal(fin.box?.[String(p.athlete_id)] || {}, p.stat); result = final === ln ? 'P' : (final > ln) === (side === 'over') ? 'W' : 'L'; }
-      const dest = q === 0 ? live : list;
+      const dest = q === 0 ? liveList : list;
       dest.push({ p, g, a, pos, q, s, now, m, ln, src, pre, side, pS, edge: side === 'over' ? m.fair - ln : ln - m.fair, result, final, week: hg?.week ?? null, team: espnTeam ?? team });
     }
   }
-  return { list, live, snaps, G };
+  return { list, liveList, snaps, G };
 }
 
 export async function render(el) {
@@ -117,7 +117,7 @@ export async function render(el) {
     const nowMs = Date.now();
     const finals = new Set(T.snaps.filter((s) => s.period === 4).map((s) => String(s.game_id)));
     const liveSnaps = new Map(T.snaps.filter((s) => s.period === 0 && s.meta && !finals.has(String(s.game_id)) && nowMs - Date.parse(s.ts) < 10 * 60e3).map((s) => [String(s.game_id), s]));
-    const cnt = new Map(); for (const t of [...T.live, ...list]) { const k = String(t.p.game_id); cnt.set(k, (cnt.get(k) || 0) + 1); }
+    const cnt = new Map(); for (const t of [...T.liveList, ...list]) { const k = String(t.p.game_id); cnt.set(k, (cnt.get(k) || 0) + 1); }
     const slate = (T.sched || []).filter((g) => g.state !== 'post' && !finals.has(String(g.id))).sort((a, b) => (liveSnaps.has(String(b.id)) - liveSnaps.has(String(a.id))) || Date.parse(a.start_time) - Date.parse(b.start_time));
     const gcard = (g) => { const id = String(g.id), ls = liveSnaps.get(id); const hp = ls ? ls.home_pts : g.home_score ?? 0, ap = ls ? ls.away_pts : g.away_score ?? 0, n = cnt.get(id) || 0;
       const status = ls ? (/half|end/i.test(ls.meta.detail || '') ? ls.meta.detail : `Q${ls.meta.period} ${ls.meta.display}`) : `${fmtDay(g.start_time)} · ${fmtTime(g.start_time)}`;
@@ -136,7 +136,7 @@ export async function render(el) {
       const script = d === 0 ? `Tied-up game (${ap}–${hp}). Neutral script — don’t overfit one drive.`
         : d < 10 ? `${esc(lead)} up ${d}. Score still tight; game script close to the open.`
         : `${esc(lead)} up ${d}. ${ls && ls.meta.period >= 2 ? 'The trailing team leans on the pass, the leader on the run.' : 'Early yet; the script isn’t set.'}`;
-      const liveT = mine(T.live);
+      const liveT = mine(T.liveList);
       const lockedSec = [3, 2, 1].map((q) => { const sn = T.snaps.find((s) => String(s.game_id) === gid && s.period === q); if (!sn) return '';
         const ts = mine(list.filter((t) => t.q === q)), gr = ts.filter((t) => t.result), tl = tally(gr);
         return `<div class="sec"><h2 style="font-size:20px">${QN[q]}</h2><p class="sub">Locked at the whistle · ${esc(gm.away)} ${sn.away_pts}, ${esc(gm.home)} ${sn.home_pts}${gr.length ? ` · <b class="num">${rt(tl)}</b> ${pct(rp(tl), 0)}` : ''}</p>
