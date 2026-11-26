@@ -1,9 +1,9 @@
 // At the Whistle: NFL live player props at the end of Q1, halftime and the end of Q3. Each ticket is the projected
 // final against the line at that moment, locked at the whistle and graded on the final box score.
-import { api, apiAll, ago, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611260314';
-import { STATS, TYPE_GROUP, propData, project, atWhistle, boxVal, calibrate } from './propmodel.js?v=202611260314';
-import { trackBtn } from './mybets.js?v=202611260314';
-import { ncdf } from './core.js?v=202611260314';
+import { api, apiAll, ago, esc, fmtTime, fmtDay, pct, sgn, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611260317';
+import { STATS, TYPE_GROUP, propData, project, atWhistle, boxVal, calibrate } from './propmodel.js?v=202611260317';
+import { trackBtn } from './mybets.js?v=202611260317';
+import { ncdf } from './core.js?v=202611260317';
 
 const QN = { 0: 'Live', 1: 'End Q1', 2: 'Halftime', 3: 'End Q3' };
 const NEED = { over: 0.6, under: 0.58 }; // overs need more of an edge than unders
@@ -71,7 +71,8 @@ export async function tickets() {
       const pS = side === 'over' ? pOver : 1 - pOver;
       let result = null, final = null;
       if (fin) { final = boxVal(fin.box?.[String(p.athlete_id)] || {}, p.stat); result = final === ln ? 'P' : (final > ln) === (side === 'over') ? 'W' : 'L'; }
-      (q === 0 ? live : list).push({ p, g, a, pos, q, s, now, m, ln, src, pre, side, pS, edge: side === 'over' ? m.fair - ln : ln - m.fair, result, final, week: hg?.week ?? null, team: espnTeam ?? team });
+      const dest = q === 0 ? live : list;
+      dest.push({ p, g, a, pos, q, s, now, m, ln, src, pre, side, pS, edge: side === 'over' ? m.fair - ln : ln - m.fair, result, final, week: hg?.week ?? null, team: espnTeam ?? team });
     }
   }
   return { list, live, snaps, G };

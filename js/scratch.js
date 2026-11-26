@@ -1,7 +1,7 @@
 // Cooking from Scratch: every Louisiana scratch-off still for sale, read from the official prize tables.
 // Return per $1, "heat" (are the good prizes lasting longer than the tickets?), real odds of a $500+ prize now,
 // and what it costs on average to hit one. Not a tip to buy: every game returns less than it costs.
-import { api, esc, pct, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611260314';
+import { api, esc, pct, seg, onSeg, store, howTo, wireHow, footNote, clearCache } from './core.js?v=202611260317';
 
 const money = (n) => n >= 1e6 ? `$${(n / 1e6).toFixed(n % 1e6 ? 1 : 0)}M` : n >= 1000 ? `$${Math.round(n).toLocaleString()}` : `$${n % 1 ? n.toFixed(2) : n}`;
 const cents = (x) => `${Math.round(x * 100)}¢`;
