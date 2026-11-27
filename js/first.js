@@ -6,9 +6,9 @@
 // comes from the earliest kickoff window (games that start together race the same way).
 // While games are on, ESPN's free scoring plays are checked every minute and every TD is marked with the game clock
 // and the time this page first saw it.
-import { esc, pct, fmtTime, fmtDay, footNote, howTo, wireHow, store, seg, onSeg, clearCache } from './core.js?v=202611260325';
-import { redzoneData } from './redzone.js?v=202611260325';
-import { amOf } from './rr.js?v=202611260325';
+import { esc, pct, fmtTime, fmtDay, footNote, howTo, wireHow, store, seg, onSeg, clearCache } from './core.js?v=202611272055';
+import { redzoneData } from './redzone.js?v=202611272055';
+import { amOf } from './rr.js?v=202611272055';
 
 const OTHER = 0.08; // share of TDs scored by defense, special teams, or players not listed
 const etDay = (iso) => new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });

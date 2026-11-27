@@ -1,7 +1,7 @@
-import { games, api, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611260325';
-import { flagNow, loadFlags, gradeFlags, TRIG, historyNote, SNAPS_FROM } from './moves.js?v=202611260325';
-import { trackBtn } from './mybets.js?v=202611260325';
-import { nflHist } from './hist.js?v=202611260325';
+import { games, api, line, esc, logo, seg, onSeg, store, pct, fmtTime, fmtDay, howTo, wireHow, footNote, clearCache, sgn, unitsAt110 } from './core.js?v=202611272055';
+import { flagNow, loadFlags, gradeFlags, TRIG, historyNote, SNAPS_FROM } from './moves.js?v=202611272055';
+import { trackBtn } from './mybets.js?v=202611272055';
+import { nflHist } from './hist.js?v=202611272055';
 
 // Totals rules written up front (not mined from the data), then checked on two separate halves of history.
 export const CUTS = [

@@ -1,8 +1,8 @@
 // Betting Council: Grok, Muse, Gemini and Claude post daily picks, cross-examine each other,
 // and the Final Card is what 3 of 4 back. Claude's scheduled tasks copy each day's files and the
 // ledger from Google Drive into blobs (council:day:YYYY-MM-DD, council:ledger); this page only reads them.
-import { addBet, isTracked } from './mybets.js?v=202611260325';
-import { api, blob, ago, toast } from './core.js?v=202611260325';
+import { addBet, isTracked } from './mybets.js?v=202611272055';
+import { api, blob, ago, toast } from './core.js?v=202611272055';
 
 const CSS = '.council .dayrec{font:600 15px Inter,sans-serif;text-transform:none;color:var(--ink)}.council .dayrec .pos{color:var(--win)}.council .dayrec .neg{color:var(--loss)}.council .colrec{font-size:13px;color:var(--mute);margin:-4px 0 10px}.council .colrec .dayrec{font-size:14px}\n.council .tr{display:flex;gap:6px;align-items:flex-start}.council button.ctrack{padding:0;width:28px;height:28px;border-radius:50%;font:700 17px/1 Inter,sans-serif;background:var(--gold);color:#101411;border:0;flex:none}.council button.ctrack:disabled{opacity:.5}\n.council .tag.u2{background:var(--gold);color:#101411;border-color:var(--gold);font-weight:700}\n.council{\n    --panel:var(--surface); --panel2:var(--surface2); --line:var(--line2);\n    --ink:#e8ecf1; --mute:#8a95a5; --dim:#5d6876;\n    --win:#2fbf71; --loss:#e5484d; --push:#d1a23b; --pend:#5d6876;\n    --grok:#e8ecf1; --muse:#4f8cff; --gemini:#34c3a0; --claude:#d97757; --card:#f5c542;\n  }\n.council .wrap{max-width:1180px;margin:0 auto;padding:18px 16px 40px}\n.council header{display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between;margin-bottom:16px}\n.council .datebar{display:flex;align-items:center;gap:6px}\n.council button{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 11px;font:600 13px Inter,sans-serif;cursor:pointer}\n.council button:hover{border-color:var(--mute)}\n.council input[type=date]{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:500 13px Inter,sans-serif;color-scheme:dark}\n.council .status{font-size:12px;color:var(--mute);min-height:18px;margin:-6px 0 12px}\n.council .status.err{color:var(--loss)}\n.council .records{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:18px}\n.council .rec{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;border-top:3px solid var(--c)}\n.council .rec .who{font:700 15px "Barlow Condensed",sans-serif;text-transform:uppercase;color:var(--c)}\n.council .rec .units{font:700 28px "Barlow Condensed",sans-serif}\n.council .rec .units.pos{color:var(--win)}\n.council .rec .units.neg{color:var(--loss)}\n.council .rec .sub{font-size:12px;color:var(--mute)}\n.council section.final{background:linear-gradient(180deg,#221f12,var(--panel));border:1px solid #4a4020;border-radius:14px;padding:14px 16px;margin-bottom:18px}\n.council section.final h2{font-size:22px;text-transform:uppercase;color:var(--card);margin-bottom:10px}\n.council .finalgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}\n.council .cols{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}\n.council .col{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;border-top:3px solid var(--c)}\n.council .col h2{font-size:21px;text-transform:uppercase;color:var(--c);display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}\n.council .col h2 small{font:500 12px Inter,sans-serif;color:var(--mute);text-transform:none}\n.council .pick{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px;border-left:4px solid var(--rc,var(--pend))}\n.council .pick .top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}\n.council .sel{font:700 19px "Barlow Condensed",sans-serif;line-height:1.15}\n.council .badge{font:700 12px Inter,sans-serif;padding:3px 8px;border-radius:6px;white-space:nowrap;background:var(--rc,var(--pend));color:#0f1216}\n.council .meta{font-size:12px;color:var(--mute);margin-top:3px}\n.council .meta b{color:var(--ink);font-weight:600}\n.council .tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}\n.council .tag{font-size:11px;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--mute)}\n.council .tag.alt{border-color:var(--push);color:var(--push)}\n.council .tag.fc{border-color:var(--card);color:var(--card)}\n.council .verdicts{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}\n.council .v{font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px;cursor:pointer;border:1px solid transparent}\n.council .v.agree{background:#173826;color:var(--win)}\n.council .v.disagree{background:#3a1b1d;color:var(--loss)}\n.council .v.pass{background:#262b33;color:var(--mute)}\n.council details{margin-top:7px}\n.council summary{font-size:12px;color:var(--mute);cursor:pointer}\n.council details p{margin:6px 0 0;font-size:13px;color:#c5ccd6}\n.council .why{font-size:12.5px;color:#c5ccd6;margin-top:6px;padding:7px 9px;background:#14181d;border-radius:7px;display:none}\n.council .why.show{display:block}\n.council .empty{color:var(--dim);font-size:13px;padding:14px 4px;text-align:center}\n.council .changes{font-size:12px;color:var(--mute);margin-top:6px;border-top:1px dashed var(--line);padding-top:8px}\n.council .backed{font-size:12px;color:var(--card);margin-top:5px}\n.council footer{margin-top:22px;font-size:12px;color:var(--dim);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}\n.council footer a{color:var(--mute)}\n.council .gate{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px;display:none}\n@media (max-width:1100px){.council .cols{grid-template-columns:repeat(2,1fr)}.council .records{grid-template-columns:repeat(3,1fr)}}\n@media (max-width:700px){.council .cols{grid-template-columns:1fr}.council .records{grid-template-columns:repeat(2,1fr)}}';
 const SCHED_KEY = "__schedule";
@@ -154,6 +154,22 @@ function dayRec(results){
   return `<span class="dayrec"><b>${w}-${l}${p?"-"+p:""}</b> <b class="${cls}">${u>=0?"+":"−"}${Math.abs(u).toFixed(2)}u</b></span>`;
 }
 
+// Record of the Final Card picks that all four members backed, graded from the same ledger rows the cards use.
+function unanRec(ledger){
+  const r0 = {w:0,l:0,p:0,u:0,pend:0}, rows = ledger.rows;
+  for (const q of ledger.unan || []){
+    const n = norm(q.selection), lastNum = s => (String(s||"").match(/[+\-]?\d+(?:\.\d+)?(?!.*\d)/) || [null])[0];
+    const loose = r => (norm(r.pick).includes(n) || n.includes(norm(r.pick))) && lastNum(r.pick) === lastNum(q.selection);
+    const res = rows.find(r=>r.date===q.date && r.fc && norm(r.pick)===n) || rows.find(r=>r.date===q.date && r.fc && loose(r)) ||
+                rows.find(r=>r.date===q.date && /final/i.test(r.member) && norm(r.pick)===n);
+    const x = res && rc(res);
+    if (!x){ r0.pend++; continue; }
+    const o = parseInt(String(q.odds||res.odds||"").replace(/[^\d+\-]/g,""), 10);
+    if (x==="W"){ r0.w++; r0.u += Number.isFinite(o) && Math.abs(o)>=100 ? (o>0 ? o/100 : 100/-o) : 100/110; }
+    else if (x==="L"){ r0.l++; r0.u -= 1; } else r0.p++;
+  }
+  return r0;
+}
 function renderRecords(ledger){
   const tiles = [...MEMBERS.map(m=>({key:m.key, label:m.key, color:m.color})), {key:"FINAL CARD", label:"Final Card", color:"var(--card)"}];
   $("records").innerHTML = tiles.map(t=>{
@@ -166,6 +182,8 @@ function renderRecords(ledger){
       <div class="who">${esc(t.label)}</div>
       <div class="units ${units>0?"pos":units<0?"neg":""}">${units>0?"+":""}${units.toFixed(2)}u</div>
       <div class="sub">${esc(wl)} W-L-P${acc?` · rebuttals ${esc(acc)}`:""}</div>
+      ${t.key==="FINAL CARD" && (ledger.unan||[]).length ? (()=>{ const a = unanRec(ledger), g = a.w+a.l+a.p;
+        return `<div class="sub" title="Final Card picks that all four members backed, 1 unit each at the card's odds. Picks where any member passed or disagreed are left out.">All 4 agreed: <b>${a.w}-${a.l}${a.p?"-"+a.p:""}</b>${g?` · <b class="${a.u>0.004?"pos":a.u<-0.004?"neg":""}">${a.u>=0?"+":"−"}${Math.abs(a.u).toFixed(2)}u</b>`:""}${a.pend?` · ${a.pend} pending`:""}</div>`; })() : ""}
     </div>`;
   }).join("");
 }
@@ -341,11 +359,12 @@ export async function render(el){
     const date = $("date").value, my = ++seq;
     setStatus("Loading " + date + "…");
     try {
-      const [day, led, sch] = await Promise.all([blob("council:day:"+date, 60_000), blob("council:ledger", 60_000), blob("council:schedule", 60_000)]);
+      const [day, led, sch, unan] = await Promise.all([blob("council:day:"+date, 60_000), blob("council:ledger", 60_000), blob("council:schedule", 60_000), api("council_unanimous?select=*&order=date.asc", {ttl: 5*60_000}).catch(()=>[])]);
       if (my !== seq) return;
       const files = Object.assign({}, day?.data?.files || {});
       files[SCHED_KEY] = day?.data?.schedule || sch?.data?.text || "";
-      render_(date, files, parseLedger(led?.data?.text || ""));
+      const lg = parseLedger(led?.data?.text || ""); lg.unan = unan;
+      render_(date, files, lg);
       setStatus(day ? `Updated ${ago(new Date(day.updated_at))}` : `Nothing posted for ${date} yet.`);
     } catch(e) { if (my===seq) setStatus("Couldn't load the council: " + e.message, true); }
   }
